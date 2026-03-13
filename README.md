@@ -60,7 +60,7 @@ User Input (Natural Language)
 | Software | Version | Required? | Description |
 |----------|---------|-----------|-------------|
 | **Python** | 3.10+ | ✅ Required | Main programming language |
-| **OpenAI API Key** | — | ✅ Required | For AI circuit design |
+| **AI API Key** | — | ✅ Required | OpenAI, Google Gemini, Anthropic, or any compatible LLM API |
 | **KiCad** | 8.0+ | ⚡ Recommended | For advanced PCB export & 3D models |
 | **Java** | 11+ | 🔧 Optional | For Freerouting auto-routing |
 | **Freerouting** | 2.0+ | 🔧 Optional | Automatic trace routing |
