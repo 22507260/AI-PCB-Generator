@@ -1,0 +1,46 @@
+{
+  "name": "Simple LED Circuit",
+  "description": "5V güç kaynağı ile çalışan basit LED devresi. 330Ω akım sınırlayıcı direnç ile yaklaşık 9mA LED akımı.",
+  "components": [
+    {
+      "ref": "J1",
+      "value": "Conn_01x02",
+      "category": "connector",
+      "package": "PinHeader_1x02_P2.54mm",
+      "description": "2-pin güç konnektörü (5V ve GND)",
+      "pins": [
+        {"number": "1", "name": "VIN", "electrical_type": "power_in"},
+        {"number": "2", "name": "GND", "electrical_type": "power_in"}
+      ]
+    },
+    {
+      "ref": "R1",
+      "value": "330Ω",
+      "category": "resistor",
+      "package": "0805",
+      "description": "Akım sınırlayıcı direnç",
+      "pins": [
+        {"number": "1", "name": "1", "electrical_type": "passive"},
+        {"number": "2", "name": "2", "electrical_type": "passive"}
+      ]
+    },
+    {
+      "ref": "D1",
+      "value": "Red LED",
+      "category": "led",
+      "package": "0805",
+      "description": "Kırmızı LED, Vf ≈ 2V, 20mA",
+      "pins": [
+        {"number": "1", "name": "A", "electrical_type": "passive"},
+        {"number": "2", "name": "K", "electrical_type": "passive"}
+      ]
+    }
+  ],
+  "nets": [
+    {"name": "VCC", "connections": [{"ref": "J1", "pin": "1"}, {"ref": "R1", "pin": "1"}]},
+    {"name": "LED_A", "connections": [{"ref": "R1", "pin": "2"}, {"ref": "D1", "pin": "1"}]},
+    {"name": "GND", "connections": [{"ref": "D1", "pin": "2"}, {"ref": "J1", "pin": "2"}]}
+  ],
+  "board": {"width_mm": 30.0, "height_mm": 20.0, "layers": 2, "thickness_mm": 1.6},
+  "constraints": {"trace_width_mm": 0.3, "clearance_mm": 0.2}
+}

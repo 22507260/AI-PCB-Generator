@@ -1,0 +1,124 @@
+{
+  "name": "5V to 3.3V Voltage Regulator",
+  "description": "AMS1117-3.3 LDO regülatör ile 5V'dan 3.3V çıkış üreten güç kaynağı modülü. Giriş/çıkış bypass kapasitörleri ve güç LED göstergesi dahil.",
+  "components": [
+    {
+      "ref": "J1",
+      "value": "Conn_01x02",
+      "category": "connector",
+      "package": "PinHeader_1x02_P2.54mm",
+      "description": "5V güç girişi",
+      "pins": [
+        {"number": "1", "name": "VIN", "electrical_type": "power_in"},
+        {"number": "2", "name": "GND", "electrical_type": "power_in"}
+      ]
+    },
+    {
+      "ref": "J2",
+      "value": "Conn_01x02",
+      "category": "connector",
+      "package": "PinHeader_1x02_P2.54mm",
+      "description": "3.3V güç çıkışı",
+      "pins": [
+        {"number": "1", "name": "VOUT", "electrical_type": "power_out"},
+        {"number": "2", "name": "GND", "electrical_type": "power_out"}
+      ]
+    },
+    {
+      "ref": "U1",
+      "value": "AMS1117-3.3",
+      "category": "regulator",
+      "package": "SOT-223",
+      "description": "3.3V LDO voltage regulator, 1A max",
+      "pins": [
+        {"number": "1", "name": "GND", "electrical_type": "power_in"},
+        {"number": "2", "name": "VOUT", "electrical_type": "power_out"},
+        {"number": "3", "name": "VIN", "electrical_type": "power_in"}
+      ]
+    },
+    {
+      "ref": "C1",
+      "value": "10µF",
+      "category": "capacitor",
+      "package": "0805",
+      "description": "Giriş bypass kapasitörü",
+      "pins": [
+        {"number": "1", "name": "1", "electrical_type": "passive"},
+        {"number": "2", "name": "2", "electrical_type": "passive"}
+      ]
+    },
+    {
+      "ref": "C2",
+      "value": "10µF",
+      "category": "capacitor",
+      "package": "0805",
+      "description": "Çıkış bypass kapasitörü",
+      "pins": [
+        {"number": "1", "name": "1", "electrical_type": "passive"},
+        {"number": "2", "name": "2", "electrical_type": "passive"}
+      ]
+    },
+    {
+      "ref": "C3",
+      "value": "100nF",
+      "category": "capacitor",
+      "package": "0805",
+      "description": "Giriş decoupling kapasitörü",
+      "pins": [
+        {"number": "1", "name": "1", "electrical_type": "passive"},
+        {"number": "2", "name": "2", "electrical_type": "passive"}
+      ]
+    },
+    {
+      "ref": "R1",
+      "value": "1kΩ",
+      "category": "resistor",
+      "package": "0805",
+      "description": "LED akım sınırlayıcı direnç",
+      "pins": [
+        {"number": "1", "name": "1", "electrical_type": "passive"},
+        {"number": "2", "name": "2", "electrical_type": "passive"}
+      ]
+    },
+    {
+      "ref": "D1",
+      "value": "Green LED",
+      "category": "led",
+      "package": "0805",
+      "description": "Güç gösterge LED'i",
+      "pins": [
+        {"number": "1", "name": "A", "electrical_type": "passive"},
+        {"number": "2", "name": "K", "electrical_type": "passive"}
+      ]
+    }
+  ],
+  "nets": [
+    {"name": "VIN_5V", "connections": [
+      {"ref": "J1", "pin": "1"},
+      {"ref": "U1", "pin": "3"},
+      {"ref": "C1", "pin": "1"},
+      {"ref": "C3", "pin": "1"}
+    ]},
+    {"name": "VOUT_3V3", "connections": [
+      {"ref": "U1", "pin": "2"},
+      {"ref": "J2", "pin": "1"},
+      {"ref": "C2", "pin": "1"},
+      {"ref": "R1", "pin": "1"}
+    ]},
+    {"name": "LED_A", "connections": [
+      {"ref": "R1", "pin": "2"},
+      {"ref": "D1", "pin": "1"}
+    ]},
+    {"name": "GND", "connections": [
+      {"ref": "J1", "pin": "2"},
+      {"ref": "J2", "pin": "2"},
+      {"ref": "U1", "pin": "1"},
+      {"ref": "C1", "pin": "2"},
+      {"ref": "C2", "pin": "2"},
+      {"ref": "C3", "pin": "2"},
+      {"ref": "D1", "pin": "2"}
+    ]}
+  ],
+  "board": {"width_mm": 40.0, "height_mm": 25.0, "layers": 2, "thickness_mm": 1.6},
+  "constraints": {"trace_width_mm": 0.4, "clearance_mm": 0.2}
+}
