@@ -7,22 +7,11 @@ import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
 
 from src.simulation.results import AnalysisConfig, SimulationResult
+from src.vendor import find_ngspice as _vendor_find_ngspice
 
 log = logging.getLogger(__name__)
-
-# Common NgSpice install locations
-_NGSPICE_PATHS = [
-    r"C:\Spice64\bin\ngspice.exe",
-    r"C:\Spice64_dll\bin\ngspice.exe",
-    r"C:\Program Files\Spice64\bin\ngspice.exe",
-    r"C:\Program Files\ngspice\bin\ngspice.exe",
-    "/usr/bin/ngspice",
-    "/usr/local/bin/ngspice",
-    "/opt/homebrew/bin/ngspice",
-]
 
 
 class NgSpiceEngine:
@@ -32,21 +21,14 @@ class NgSpiceEngine:
         self._exe: str | None = None
 
     def find_ngspice(self) -> str | None:
-        """Locate the ngspice executable. Returns path or None."""
+        """Locate the ngspice executable (vendor first, then system)."""
         if self._exe:
             return self._exe
 
-        # Check PATH first
-        found = shutil.which("ngspice")
+        found = _vendor_find_ngspice()
         if found:
             self._exe = found
             return self._exe
-
-        # Check common install locations
-        for p in _NGSPICE_PATHS:
-            if os.path.isfile(p):
-                self._exe = p
-                return self._exe
 
         return None
 

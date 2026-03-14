@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from src.config import get_settings, ROOT_DIR
 from src.gui.i18n import tr, Translator
 from src.gui.theme import DARK_THEME, LIGHT_THEME
+from src.vendor import get_tool_status
 from src.utils.logger import get_logger
 
 log = get_logger("gui.settings_dialog")
@@ -118,6 +119,22 @@ class SettingsDialog(QDialog):
         self._lbl_freerouting = QLabel()
         path_form.addRow(self._lbl_freerouting, fr_row)
 
+        ngspice_row = QHBoxLayout()
+        self._ngspice_path = QLineEdit()
+        ngspice_row.addWidget(self._ngspice_path, 1)
+        ngspice_browse = QPushButton("📁")
+        ngspice_browse.setMaximumWidth(40)
+        ngspice_browse.clicked.connect(lambda: self._browse_file(self._ngspice_path, "Executable (*.exe);;All (*)"))
+        ngspice_row.addWidget(ngspice_browse)
+        self._lbl_ngspice = QLabel()
+        path_form.addRow(self._lbl_ngspice, ngspice_row)
+
+        # Tool status indicators
+        self._tool_status_label = QLabel()
+        self._tool_status_label.setWordWrap(True)
+        self._tool_status_label.setStyleSheet("font-size: 12px; padding: 4px;")
+        path_form.addRow("", self._tool_status_label)
+
         layout.addWidget(self._path_group)
 
         # --- UI ---
@@ -185,6 +202,8 @@ class SettingsDialog(QDialog):
         self._kicad_path.setText(settings.kicad_path)
         self._kicad_3d_path.setText(settings.kicad_3dmodels_path)
         self._fr_path.setText(settings.freerouting_jar)
+        self._ngspice_path.setText(settings.ngspice_path)
+        self._update_tool_status()
         self._lang_combo.setCurrentIndex(0 if settings.language == "tr" else 1)
         self._theme_combo.setCurrentIndex(0 if settings.theme == "dark" else 1)
 
@@ -229,6 +248,9 @@ class SettingsDialog(QDialog):
         self._kicad_3d_path.setPlaceholderText(tr("placeholder_kicad_3d"))
         self._lbl_freerouting.setText(tr("label_freerouting"))
         self._fr_path.setPlaceholderText(tr("placeholder_freerouting"))
+        self._lbl_ngspice.setText(tr("label_ngspice"))
+        self._ngspice_path.setPlaceholderText(tr("placeholder_ngspice"))
+        self._update_tool_status()
         self._ui_group.setTitle(tr("group_ui"))
         self._lbl_lang.setText(tr("label_language"))
         self._lbl_theme.setText(tr("label_theme"))
@@ -239,6 +261,21 @@ class SettingsDialog(QDialog):
         self._theme_combo.setCurrentIndex(0 if settings.theme == "dark" else 1)
         self._cancel_btn.setText(tr("button_cancel"))
         self._save_btn.setText(tr("button_save"))
+
+    def _update_tool_status(self):
+        """Refresh tool detection status indicators."""
+        status = get_tool_status()
+        parts = []
+        for name, info in status.items():
+            if info["found"]:
+                if "vendor" in info.get("path", ""):
+                    label = tr("tool_bundled")
+                else:
+                    label = tr("tool_found")
+            else:
+                label = tr("tool_not_found")
+            parts.append(f"<b>{name}:</b> {label}")
+        self._tool_status_label.setText("<br>".join(parts))
 
     def _save(self):
         """Write settings to .env file."""
@@ -267,6 +304,10 @@ class SettingsDialog(QDialog):
         fr = self._fr_path.text().strip()
         if fr:
             lines.append(f"FREEROUTING_JAR={fr}")
+
+        ngspice = self._ngspice_path.text().strip()
+        if ngspice:
+            lines.append(f"NGSPICE_PATH={ngspice}")
 
         lang = "tr" if self._lang_combo.currentIndex() == 0 else "en"
         lines.append(f"LANGUAGE={lang}")

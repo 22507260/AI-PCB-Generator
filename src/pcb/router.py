@@ -12,6 +12,7 @@ from pathlib import Path
 
 from src.pcb.generator import Board, TraceSegment, Via
 from src.config import get_settings
+from src.vendor import find_freerouting_jar
 from src.utils.logger import get_logger
 
 log = get_logger("pcb.router")
@@ -26,8 +27,7 @@ class FreeroutingRouter:
 
     def __init__(self, board: Board, jar_path: str | None = None):
         self.board = board
-        settings = get_settings()
-        self._jar = jar_path or settings.freerouting_jar
+        self._jar = jar_path or find_freerouting_jar() or ""
 
     def route(self, timeout_seconds: int = 300) -> Board:
         """Run Freerouting and return the board with routed traces.

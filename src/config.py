@@ -27,6 +27,7 @@ class AppSettings(BaseSettings):
     kicad_path: str = Field(default="", description="KiCad installation directory")
     kicad_3dmodels_path: str = Field(default="", description="KiCad 3D models directory (auto-detected if empty)")
     freerouting_jar: str = Field(default="", description="Path to freerouting.jar")
+    ngspice_path: str = Field(default="", description="Path to ngspice executable")
 
     # --- PCB Defaults ---
     default_trace_width_mm: float = Field(default=0.25)
