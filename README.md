@@ -377,6 +377,6 @@ MIT License — see the [LICENSE](LICENSE) file for details.
   <strong>Built with ❤️ using Python, PySide6/Qt6, and AI</strong><br/>
   <sub>Star ⭐ this repo if you find it useful!</sub><br/><br/>
   <a href="https://buymeacoffee.com/otis21">
-    <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=otis21&button_colour=FFDD00&font_colour=000000&font_family=Poppins&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" />
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="200" />
   </a>
 </p>
