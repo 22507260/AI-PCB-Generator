@@ -226,6 +226,51 @@ def _map_package(category: str, package: str, models_dir: str) -> Optional[str]:
                 if os.path.isfile(path):
                     return path
 
+    # ── USB connectors ──
+    if category == "usb_connector":
+        # Try Type-C first
+        for pattern in ("USB_C_Receptacle*.wrl", "USB_C*.wrl",
+                        "USB_A*.wrl", "USB_Micro*B*.wrl", "USB_Mini*B*.wrl",
+                        "USB*.wrl"):
+            _glob_results = glob.glob(
+                os.path.join(models_dir, "Connector_USB.3dshapes", pattern))
+            if _glob_results:
+                return _glob_results[0]
+
+    # ── Barrel jack / DC power connectors ──
+    if category == "barrel_jack":
+        _glob_results = glob.glob(
+            os.path.join(models_dir, "Connector_BarrelJack.3dshapes", "*.wrl"))
+        if _glob_results:
+            return _glob_results[0]
+
+    # ── JST connectors ──
+    if category == "jst_connector":
+        for jst_dir in ("Connector_JST.3dshapes",):
+            _glob_results = glob.glob(
+                os.path.join(models_dir, jst_dir, "*.wrl"))
+            if _glob_results:
+                return _glob_results[0]
+        # Also try specific JST sub-libraries
+        for jst_lib in glob.glob(os.path.join(models_dir, "Connector_JST*.3dshapes")):
+            _glob_results = glob.glob(os.path.join(jst_lib, "*.wrl"))
+            if _glob_results:
+                return _glob_results[0]
+
+    # ── Transformer ──
+    if category == "transformer":
+        for trafo_lib in glob.glob(os.path.join(models_dir, "Transformer*.3dshapes")):
+            _glob_results = glob.glob(os.path.join(trafo_lib, "*.wrl"))
+            if _glob_results:
+                return _glob_results[0]
+
+    # ── Sensor ──
+    if category == "sensor":
+        for sensor_lib in glob.glob(os.path.join(models_dir, "Sensor*.3dshapes")):
+            _glob_results = glob.glob(os.path.join(sensor_lib, "*.wrl"))
+            if _glob_results:
+                return _glob_results[0]
+
     # ── Crystal ──
     if category == "crystal":
         _glob_results = glob.glob(

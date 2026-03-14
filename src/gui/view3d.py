@@ -82,6 +82,19 @@ _DIODE_BODY = QColor("#202020")
 _DIODE_BAND = QColor("#D0D0D0")
 _LEAD_COLOR = QColor("#C8C8C8")
 _SOLDER_COLOR = QColor("#B0A080")
+_USB_SHELL = QColor("#C0C0C0")
+_USB_SHELL_DARK = QColor("#909090")
+_USB_TONGUE = QColor("#F0F0F0")
+_USB_PORT_HOLE = QColor("#0A0A0A")
+_BARREL_BODY = QColor("#1A1A1A")
+_BARREL_RING = QColor("#A8A8A8")
+_BARREL_CENTER = QColor("#D0D0D0")
+_TRANSFORMER_BODY = QColor("#2A2418")
+_TRANSFORMER_BOBBIN = QColor("#C8A840")
+_TRANSFORMER_WIRE = QColor("#D48030")
+_SENSOR_BODY = QColor("#181818")
+_SENSOR_WINDOW = QColor("#304060")
+_JST_BODY = QColor("#F0F0E8")
 
 
 # Cached trig values for projection — avoids recalculating per-vertex
@@ -146,7 +159,26 @@ def _classify_component(ref: str, value: str) -> str:
         return "transistor"
     if r.startswith("U"):
         return "ic"
+    if r.startswith("T") and not r.startswith("TP"):
+        if any(k in v for k in ("transformer", "trafo", "coupled", "isolation")):
+            return "transformer"
+    if any(k in v for k in ("sensor", "bme", "bmp", "dht", "mpu", "lm35",
+                            "ntc", "thermistor", "accelero", "gyro",
+                            "lis3", "adxl", "hmc", "ina", "tsl", "bh1750",
+                            "ds18", "sht", "aht", "max31", "pt100")):
+        return "sensor"
     if r.startswith("J") or r.startswith("P") or r.startswith("CN"):
+        # Sub-classify connector types from value string
+        if any(k in v for k in ("usb", "type-c", "type c", "type-a",
+                                "type a", "type-b", "type b",
+                                "micro-usb", "mini-usb", "micro usb",
+                                "mini usb", "usb-c", "usb c")):
+            return "usb_connector"
+        if any(k in v for k in ("barrel", "dc jack", "power jack",
+                                "dc connector", "barrel jack")):
+            return "barrel_jack"
+        if "jst" in v:
+            return "jst_connector"
         return "connector"
     if r.startswith("Y") or r.startswith("X"):
         return "crystal"
@@ -156,6 +188,10 @@ def _classify_component(ref: str, value: str) -> str:
         return "fuse"
     if r.startswith("BZ") or r.startswith("LS") or "buzzer" in v or "speaker" in v:
         return "buzzer"
+    if any(k in v for k in ("transformer", "trafo")):
+        return "transformer"
+    if any(k in v for k in ("sensor", "thermistor", "ntc", "accelero", "gyro")):
+        return "sensor"
     return "generic"
 
 
@@ -1272,6 +1308,306 @@ class _Canvas3D(QWidget):
         for pad in pads:
             painter.drawLine(p3(pad.x_mm, pad.y_mm, 0), p3(pad.x_mm, pad.y_mm, z_base))
 
+    def _draw_usb_connector(self, painter, p3, cx, cy, cw, ch, value: str, pads=None):
+        """USB connector: metallic shield body + dark port opening + shield tabs."""
+        z_base = 0.15
+        v = (value or "").lower()
+
+        # Determine USB type for proportions
+        if any(k in v for k in ("type-c", "type c", "usb-c", "usb c")):
+            body_w, body_d, body_h = max(cw, 9.0), max(ch, 3.5), 3.2
+            port_w, port_h = body_w * 0.55, body_h * 0.40
+            is_oval = True
+        elif any(k in v for k in ("micro",)):
+            body_w, body_d, body_h = max(cw, 7.5), max(ch, 3.0), 2.0
+            port_w, port_h = body_w * 0.50, body_h * 0.40
+            is_oval = False
+        elif any(k in v for k in ("mini",)):
+            body_w, body_d, body_h = max(cw, 7.5), max(ch, 4.0), 3.0
+            port_w, port_h = body_w * 0.45, body_h * 0.40
+            is_oval = False
+        else:  # USB Type-A
+            body_w, body_d, body_h = max(cw, 14.0), max(ch, 6.5), 5.0
+            port_w, port_h = body_w * 0.65, body_h * 0.55
+            is_oval = False
+
+        bx = cx + (cw - body_w) / 2
+        by = cy + (ch - body_d) / 2
+
+        # Through-hole / SMD leads
+        lead_pen = QPen(_LEAD_COLOR, max(0.6, self._zoom * 0.22))
+        lead_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(lead_pen)
+        if pads:
+            for pad in pads:
+                painter.drawLine(p3(pad.x_mm, pad.y_mm, 0),
+                                 p3(pad.x_mm, pad.y_mm, z_base))
+
+        # Shield tabs (ground mounting ears)
+        tab_w, tab_h = 1.2, body_d * 0.50
+        tab_z = z_base + body_h * 0.15
+        for tx in (bx - tab_w * 0.8, bx + body_w - tab_w * 0.2):
+            self._draw_box_gradient(painter, p3, tx, by + (body_d - tab_h) / 2,
+                                    z_base, tab_w, tab_h, body_h * 0.85,
+                                    _USB_SHELL_DARK, _USB_SHELL,
+                                    QColor(80, 80, 80))
+
+        # Main metallic shell body
+        self._draw_box_gradient(painter, p3, bx, by, z_base, body_w, body_d,
+                                body_h, _USB_SHELL, _USB_SHELL.lighter(115),
+                                QColor(100, 100, 100))
+
+        # Port opening on front face
+        port_x = bx + (body_w - port_w) / 2
+        port_z = z_base + (body_h - port_h) / 2
+        port_face = [
+            p3(port_x, by + body_d + 0.01, port_z),
+            p3(port_x + port_w, by + body_d + 0.01, port_z),
+            p3(port_x + port_w, by + body_d + 0.01, port_z + port_h),
+            p3(port_x, by + body_d + 0.01, port_z + port_h),
+        ]
+        self._draw_quad(painter, port_face, _USB_PORT_HOLE)
+
+        # Inner tongue (for Type-A) or oval shape indicator (for Type-C)
+        if is_oval:
+            # Type-C: small rounded inner rectangle indicator
+            inner_w = port_w * 0.85
+            inner_h = port_h * 0.50
+            inner_x = bx + (body_w - inner_w) / 2
+            inner_z = z_base + (body_h - inner_h) / 2
+            inner_face = [
+                p3(inner_x, by + body_d + 0.02, inner_z),
+                p3(inner_x + inner_w, by + body_d + 0.02, inner_z),
+                p3(inner_x + inner_w, by + body_d + 0.02, inner_z + inner_h),
+                p3(inner_x, by + body_d + 0.02, inner_z + inner_h),
+            ]
+            self._draw_quad(painter, inner_face, QColor(40, 40, 40))
+        else:
+            # Type-A / Mini / Micro: white tongue in upper half
+            tongue_w = port_w * 0.90
+            tongue_h = port_h * 0.40
+            tongue_x = bx + (body_w - tongue_w) / 2
+            tongue_z = port_z + port_h - tongue_h - port_h * 0.08
+            tongue_face = [
+                p3(tongue_x, by + body_d + 0.02, tongue_z),
+                p3(tongue_x + tongue_w, by + body_d + 0.02, tongue_z),
+                p3(tongue_x + tongue_w, by + body_d + 0.02, tongue_z + tongue_h),
+                p3(tongue_x, by + body_d + 0.02, tongue_z + tongue_h),
+            ]
+            self._draw_quad(painter, tongue_face, _USB_TONGUE)
+
+        # USB symbol / label on top
+        tp = p3(bx + body_w / 2, by + body_d / 2, z_base + body_h + 0.02)
+        painter.setPen(QColor(60, 60, 60))
+        label_sz = max(4, int(self._zoom * 1.2))
+        painter.setFont(QFont("Consolas", label_sz))
+        label = "USB-C" if is_oval else "USB"
+        painter.drawText(QRectF(tp.x() - 20, tp.y() - 6, 40, 12),
+                         Qt.AlignmentFlag.AlignCenter, label)
+
+    def _draw_barrel_jack(self, painter, p3, cx, cy, cw, ch, pads=None):
+        """DC barrel jack: cylindrical black body + round socket opening."""
+        z_base = 0.15
+        radius = max(min(cw, ch) * 0.35, 2.5)
+        body_h = 4.5
+        center_x = cx + cw / 2
+        center_y = cy + ch / 2
+
+        # Through-hole leads
+        lead_pen = QPen(_LEAD_COLOR, max(0.6, self._zoom * 0.22))
+        lead_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(lead_pen)
+        if pads:
+            for pad in pads:
+                painter.drawLine(p3(pad.x_mm, pad.y_mm, 0),
+                                 p3(pad.x_mm, pad.y_mm, z_base))
+
+        # Main cylindrical body (black plastic)
+        self._draw_cylinder(painter, p3, center_x, center_y, z_base,
+                           z_base + body_h, radius, _BARREL_BODY,
+                           QColor(30, 30, 30), segments=16)
+
+        # Metal rim ring on top
+        self._draw_cylinder(painter, p3, center_x, center_y,
+                           z_base + body_h - 0.3,
+                           z_base + body_h + 0.1,
+                           radius * 0.95, _BARREL_RING,
+                           _BARREL_RING.lighter(120), segments=16)
+
+        # Socket hole on top (dark circle)
+        hole_r = radius * 0.55
+        top_p = p3(center_x, center_y, z_base + body_h + 0.12)
+        hr = max(hole_r * self._zoom * 0.35, 3.0)
+        grad = QRadialGradient(top_p, hr)
+        grad.setColorAt(0, QColor(5, 5, 5))
+        grad.setColorAt(0.7, QColor(15, 15, 15))
+        grad.setColorAt(1, QColor(30, 30, 30))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(grad))
+        painter.drawEllipse(top_p, hr, hr)
+
+        # Center pin inside hole
+        pin_r = max(hole_r * self._zoom * 0.12, 1.0)
+        painter.setBrush(QBrush(_BARREL_CENTER))
+        painter.drawEllipse(top_p, pin_r, pin_r)
+
+    def _draw_jst_connector(self, painter, p3, cx, cy, cw, ch, n_pins: int, pads=None):
+        """JST-style connector: white/cream low-profile housing with pin slots."""
+        z_base = 0.15
+        body_h = max(3.0, ch * 0.5)
+        pin_w = max(cw / max(n_pins, 1), 2.0)
+
+        # Main body — white/cream plastic
+        self._draw_box_gradient(painter, p3, cx, cy, z_base, cw, ch, body_h,
+                                _JST_BODY, _JST_BODY.darker(108),
+                                QColor(180, 180, 170))
+
+        # Pin entry slots on front face
+        sorted_pads = sorted(pads, key=lambda p: p.x_mm) if pads else []
+        pin_positions = [(pad.x_mm, pad.y_mm) for pad in sorted_pads] if sorted_pads else [
+            (cx + i * pin_w + pin_w / 2, cy + ch / 2) for i in range(n_pins)
+        ]
+        for pin_x, pin_y in pin_positions:
+            slot_w = pin_w * 0.45
+            slot_h = body_h * 0.50
+            slot_x = pin_x - slot_w / 2
+            slot = [
+                p3(slot_x, cy + ch + 0.01, z_base + body_h * 0.20),
+                p3(slot_x + slot_w, cy + ch + 0.01, z_base + body_h * 0.20),
+                p3(slot_x + slot_w, cy + ch + 0.01, z_base + body_h * 0.20 + slot_h),
+                p3(slot_x, cy + ch + 0.01, z_base + body_h * 0.20 + slot_h),
+            ]
+            self._draw_quad(painter, slot, QColor(60, 60, 55))
+
+            # Through-hole pin
+            painter.setPen(QPen(_LEAD_COLOR, max(0.6, self._zoom * 0.22)))
+            painter.drawLine(p3(pin_x, pin_y, 0), p3(pin_x, pin_y, z_base))
+
+        # Latch / retention clip on top
+        latch_w = cw * 0.25
+        latch_d = ch * 0.3
+        latch_x = cx + (cw - latch_w) / 2
+        latch_y = cy + (ch - latch_d) / 2
+        self._draw_box_gradient(painter, p3, latch_x, latch_y,
+                                z_base + body_h, latch_w, latch_d, 0.5,
+                                _JST_BODY.darker(105), _JST_BODY,
+                                QColor(180, 180, 170))
+
+    def _draw_transformer(self, painter, p3, cx, cy, cw, ch, pads=None):
+        """EI-core transformer: rectangular dark body + bobbin + winding bumps."""
+        z_base = 0.15
+        body_w = max(cw, 10.0)
+        body_d = max(ch, 10.0)
+        body_h = max(min(body_w, body_d) * 0.6, 6.0)
+        bx = cx + (cw - body_w) / 2
+        by = cy + (ch - body_d) / 2
+
+        # Through-hole leads
+        lead_pen = QPen(_LEAD_COLOR, max(0.6, self._zoom * 0.22))
+        lead_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(lead_pen)
+        if pads:
+            for pad in pads:
+                painter.drawLine(p3(pad.x_mm, pad.y_mm, 0),
+                                 p3(pad.x_mm, pad.y_mm, z_base))
+
+        # E-core body (dark brown/black)
+        self._draw_box_gradient(painter, p3, bx, by, z_base, body_w, body_d,
+                                body_h, _TRANSFORMER_BODY,
+                                QColor(50, 45, 35), QColor(25, 20, 12))
+
+        # Central bobbin (yellow/amber plastic visible on top)
+        bobbin_w = body_w * 0.55
+        bobbin_d = body_d * 0.55
+        bobbin_x = bx + (body_w - bobbin_w) / 2
+        bobbin_y = by + (body_d - bobbin_d) / 2
+        bobbin_h = 0.6
+        self._draw_box_gradient(painter, p3, bobbin_x, bobbin_y,
+                                z_base + body_h, bobbin_w, bobbin_d, bobbin_h,
+                                _TRANSFORMER_BOBBIN, _TRANSFORMER_BOBBIN.lighter(115),
+                                QColor(140, 120, 50))
+
+        # Primary winding bump (left side, copper-colored)
+        wind_w = body_w * 0.15
+        wind_d = body_d * 0.70
+        wind_h = body_h * 0.70
+        self._draw_box_gradient(painter, p3,
+                                bx - wind_w * 0.3, by + (body_d - wind_d) / 2,
+                                z_base + (body_h - wind_h) / 2,
+                                wind_w, wind_d, wind_h,
+                                _TRANSFORMER_WIRE, _TRANSFORMER_WIRE.lighter(120),
+                                QColor(160, 100, 30))
+
+        # Secondary winding bump (right side)
+        self._draw_box_gradient(painter, p3,
+                                bx + body_w - wind_w * 0.7,
+                                by + (body_d - wind_d) / 2,
+                                z_base + (body_h - wind_h) / 2,
+                                wind_w, wind_d, wind_h,
+                                _TRANSFORMER_WIRE.darker(120),
+                                _TRANSFORMER_WIRE,
+                                QColor(140, 85, 25))
+
+        # Label on top
+        tp = p3(bx + body_w / 2, by + body_d / 2,
+                z_base + body_h + bobbin_h + 0.02)
+        painter.setPen(QColor(200, 180, 100))
+        label_sz = max(4, int(self._zoom * 1.0))
+        painter.setFont(QFont("Consolas", label_sz))
+        painter.drawText(QRectF(tp.x() - 20, tp.y() - 6, 40, 12),
+                         Qt.AlignmentFlag.AlignCenter, "XFMR")
+
+    def _draw_sensor(self, painter, p3, cx, cy, cw, ch, value: str, pads=None):
+        """Sensor module: small black IC body + sensing window/aperture on top."""
+        z_base = 0.15
+        body_w = max(cw, 4.0)
+        body_d = max(ch, 4.0)
+        body_h = 1.5
+        bx = cx + (cw - body_w) / 2
+        by = cy + (ch - body_d) / 2
+
+        # SMD / THT leads
+        lead_pen = QPen(_LEAD_COLOR, max(0.6, self._zoom * 0.22))
+        lead_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(lead_pen)
+        if pads:
+            for pad in pads:
+                painter.drawLine(p3(pad.x_mm, pad.y_mm, 0),
+                                 p3(pad.x_mm, pad.y_mm, z_base))
+
+        # Main body (black IC-like)
+        self._draw_box_gradient(painter, p3, bx, by, z_base, body_w, body_d,
+                                body_h, _SENSOR_BODY, QColor(30, 30, 30),
+                                QColor(15, 15, 15))
+
+        # Sensing window / aperture on top
+        win_w = body_w * 0.40
+        win_d = body_d * 0.40
+        win_x = bx + (body_w - win_w) / 2
+        win_y = by + (body_d - win_d) / 2
+        win_face = [
+            p3(win_x, win_y, z_base + body_h + 0.02),
+            p3(win_x + win_w, win_y, z_base + body_h + 0.02),
+            p3(win_x + win_w, win_y + win_d, z_base + body_h + 0.02),
+            p3(win_x, win_y + win_d, z_base + body_h + 0.02),
+        ]
+        self._draw_quad(painter, win_face, _SENSOR_WINDOW)
+
+        # Metallic rim around window
+        rim_pen = QPen(QColor(100, 110, 130), max(0.5, self._zoom * 0.12))
+        painter.setPen(rim_pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        poly = QPolygonF(win_face)
+        painter.drawPolygon(poly)
+
+        # Pin-1 dot marker
+        dot_p = p3(bx + body_w * 0.15, by + body_d * 0.15,
+                   z_base + body_h + 0.02)
+        dot_r = max(1.0, self._zoom * 0.25)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(160, 160, 160)))
+        painter.drawEllipse(dot_p, dot_r, dot_r)
+
     def _draw_generic(self, painter, p3, cx, cy, cw, ch):
         """Generic component: dark box with gradient."""
         z_base = 0.15
@@ -1508,6 +1844,16 @@ class _Canvas3D(QWidget):
                     self._draw_ic(painter, p3, cx1, cy1, cw, ch, comp.ref, comp.value, n_pins, comp.pads)
                 elif not _used_mesh and category == "connector":
                     self._draw_connector(painter, p3, cx1, cy1, cw, ch, n_pins, comp.pads)
+                elif not _used_mesh and category == "usb_connector":
+                    self._draw_usb_connector(painter, p3, cx1, cy1, cw, ch, comp.value, comp.pads)
+                elif not _used_mesh and category == "barrel_jack":
+                    self._draw_barrel_jack(painter, p3, cx1, cy1, cw, ch, comp.pads)
+                elif not _used_mesh and category == "jst_connector":
+                    self._draw_jst_connector(painter, p3, cx1, cy1, cw, ch, n_pins, comp.pads)
+                elif not _used_mesh and category == "transformer":
+                    self._draw_transformer(painter, p3, cx1, cy1, cw, ch, comp.pads)
+                elif not _used_mesh and category == "sensor":
+                    self._draw_sensor(painter, p3, cx1, cy1, cw, ch, comp.value, comp.pads)
                 elif not _used_mesh and category == "led":
                     self._draw_led(painter, p3, cx1, cy1, cw, ch, comp.value, comp.pads)
                 elif not _used_mesh and category == "diode":
