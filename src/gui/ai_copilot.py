@@ -55,20 +55,52 @@ def run_erc(spec: CircuitSpec | None) -> list[ERCViolation]:
     # Build connectivity maps
     pin_to_nets: dict[str, list[str]] = {}  # "R1:1" → [net_names]
     net_pins: dict[str, list[PinRef]] = {}
+    # Track all net-connected pin identifiers per component
+    comp_connected_pins: dict[str, set[str]] = {}  # ref → {pin_ids (lowered)}
     for net in spec.nets:
         net_pins[net.name] = list(net.connections)
         for conn in net.connections:
             key = f"{conn.ref}:{conn.pin}"
             pin_to_nets.setdefault(key, []).append(net.name)
+            comp_connected_pins.setdefault(conn.ref, set()).add(conn.pin.upper())
 
     comp_map = {c.ref: c for c in spec.components}
 
+    # Common pin name aliases (both directions)
+    _PIN_ALIASES: dict[str, set[str]] = {
+        "VIN": {"IN", "INPUT", "VIN", "V+", "VS", "VS+", "VCC", "VDD"},
+        "VOUT": {"OUT", "OUTPUT", "VOUT", "VO"},
+        "GND": {"GND", "VSS", "V-", "VS-", "GROUND", "0V", "AGND", "DGND"},
+        "IN": {"VIN", "INPUT", "IN", "V+"},
+        "OUT": {"VOUT", "OUTPUT", "OUT"},
+    }
+
     def _pin_connected(ref: str, pin) -> bool:
-        """Check if a pin is connected via number or name."""
+        """Check if a pin is connected via number, name, or common alias."""
+        # Direct key match (number or name)
         if f"{ref}:{pin.number}" in pin_to_nets:
             return True
         if pin.name and f"{ref}:{pin.name}" in pin_to_nets:
             return True
+
+        # Fuzzy match: check if any net-connected pin id for this component
+        # matches this pin by alias or containment
+        connected = comp_connected_pins.get(ref, set())
+        if not connected:
+            return False
+
+        pin_ids = {pin.number.upper()}
+        if pin.name:
+            pin_ids.add(pin.name.upper())
+
+        # Check if any connected id matches or is an alias
+        for pid in pin_ids:
+            if pid in connected:
+                return True
+            aliases = _PIN_ALIASES.get(pid, set())
+            if aliases & connected:
+                return True
+
         return False
 
     # ── Check 1: Unconnected pins ──
