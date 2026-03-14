@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200.0" height="140.0" viewBox="-5.0 -5.0 50.0 35.0">
+<rect x="-5.0" y="-5.0" width="50.0" height="35.0" fill="#1a1a2e"/>
+<rect x="0.0" y="0.0" width="40.0" height="25.0" fill="#2d2d44" stroke="#c8c800" stroke-width="0.3"/>
+<line x1="10.635" y1="10.0" x2="25.635" y2="10.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="25.635" y1="10.0" x2="38.73" y2="10.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="38.73" y1="10.0" x2="10.635" y2="25.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="10.635" y1="25.0" x2="25.635" y2="25.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="25.635" y1="25.0" x2="40.635" y2="25.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="40.635" y1="25.0" x2="25.635" y2="40.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="10.635" y1="40.0" x2="24.365" y2="40.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="9.365" y1="10.0" x2="41.27" y2="10.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="41.27" y1="10.0" x2="9.365" y2="25.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="9.365" y1="25.0" x2="39.365" y2="25.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="24.365" y1="10.0" x2="40.0" y2="10.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="40.0" y1="10.0" x2="24.365" y2="25.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<line x1="24.365" y1="25.0" x2="9.365" y2="40.0" stroke="#c83232" stroke-width="0.4" stroke-linecap="round" opacity="0.8"/>
+<rect x="8.965" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="10.235" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="10.0" y="7.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">J1</text>
+<rect x="23.965" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="25.235000000000003" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="25.0" y="7.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">J2</text>
+<rect x="38.33" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="39.6" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="40.870000000000005" y="9.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="40.0" y="7.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">U1</text>
+<rect x="8.965" y="24.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="10.235" y="24.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="10.0" y="22.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">C1</text>
+<rect x="23.965" y="24.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="25.235000000000003" y="24.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="25.0" y="22.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">C2</text>
+<rect x="38.965" y="24.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="40.235" y="24.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="40.0" y="22.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">C3</text>
+<rect x="8.965" y="39.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="10.235" y="39.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="10.0" y="37.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">R1</text>
+<rect x="23.965" y="39.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<rect x="25.235000000000003" y="39.6" width="0.8" height="0.8" rx="0.1" fill="#c83232" opacity="0.9"/>
+<text x="25.0" y="37.5" font-size="1.5" fill="white" text-anchor="middle" font-family="monospace">D1</text>
+</svg>

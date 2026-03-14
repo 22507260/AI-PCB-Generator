@@ -20,6 +20,7 @@ from src.gui.input_panel import InputPanel
 from src.gui.schematic_view import SchematicView
 from src.gui.pcb_view import PCBView
 from src.gui.view3d import View3D
+from src.gui.simulation_view import SimulationView
 from src.gui.component_panel import ComponentPanel
 from src.gui.export_dialog import ExportDialog
 from src.gui.settings_dialog import SettingsDialog
@@ -169,6 +170,9 @@ class MainWindow(QMainWindow):
         self._view_3d = View3D()
         self._tab_widget.addTab(self._view_3d, "")
 
+        self._simulation_view = SimulationView()
+        self._tab_widget.addTab(self._simulation_view, "")
+
         splitter.addWidget(self._tab_widget)
 
         splitter.setSizes([350, 850])
@@ -197,6 +201,9 @@ class MainWindow(QMainWindow):
         self._pcb_view.load_board(self._board)
         self._view_3d.load_board(self._board)
 
+        # Load circuit into simulation view
+        self._simulation_view.load_circuit(spec)
+
         # Run DRC
         drc = DRCEngine(self._board)
         violations = drc.run_all()
@@ -218,7 +225,7 @@ class MainWindow(QMainWindow):
             self._schematic_view.scale(factor, factor)
         elif idx == 1:
             self._pcb_view._view.scale(factor, factor)
-        # idx == 2 is the 3D view which handles zoom via its own mouse/wheel events
+        # idx == 2 is the 3D view, idx == 3 is simulation — both handle zoom internally
 
     # ==================================================================
     # Actions
@@ -305,4 +312,5 @@ class MainWindow(QMainWindow):
         self._tab_widget.setTabText(0, tr("tab_schematic"))
         self._tab_widget.setTabText(1, tr("tab_pcb_layout"))
         self._tab_widget.setTabText(2, tr("tab_3d_view"))
+        self._tab_widget.setTabText(3, tr("tab_simulation"))
         self._statusbar.showMessage(tr("status_ready"))

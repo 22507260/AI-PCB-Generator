@@ -1,0 +1,711 @@
+{
+  "version": "1.0",
+  "circuit": {
+    "name": "5V to 3.3V Voltage Regulator",
+    "description": "AMS1117-3.3 LDO regülatör ile 5V'dan 3.3V çıkış üreten güç kaynağı modülü. Giriş/çıkış bypass kapasitörleri ve güç LED göstergesi dahil.",
+    "components": [
+      {
+        "ref": "J1",
+        "value": "Conn_01x02",
+        "category": "connector",
+        "package": "PinHeader_1x02_P2.54mm",
+        "description": "5V güç girişi",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VIN",
+            "electrical_type": "power_in"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "electrical_type": "power_in"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 10.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "J2",
+        "value": "Conn_01x02",
+        "category": "connector",
+        "package": "PinHeader_1x02_P2.54mm",
+        "description": "3.3V güç çıkışı",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VOUT",
+            "electrical_type": "power_out"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "electrical_type": "power_out"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 25.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "U1",
+        "value": "AMS1117-3.3",
+        "category": "regulator",
+        "package": "SOT-223",
+        "description": "3.3V LDO voltage regulator, 1A max",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "GND",
+            "electrical_type": "power_in"
+          },
+          {
+            "number": "2",
+            "name": "VOUT",
+            "electrical_type": "power_out"
+          },
+          {
+            "number": "3",
+            "name": "VIN",
+            "electrical_type": "power_in"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 40.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "C1",
+        "value": "10µF",
+        "category": "capacitor",
+        "package": "0805",
+        "description": "Giriş bypass kapasitörü",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "electrical_type": "passive"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "electrical_type": "passive"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 10.0,
+        "y_mm": 25.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "C2",
+        "value": "10µF",
+        "category": "capacitor",
+        "package": "0805",
+        "description": "Çıkış bypass kapasitörü",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "electrical_type": "passive"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "electrical_type": "passive"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 25.0,
+        "y_mm": 25.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "C3",
+        "value": "100nF",
+        "category": "capacitor",
+        "package": "0805",
+        "description": "Giriş decoupling kapasitörü",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "electrical_type": "passive"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "electrical_type": "passive"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 40.0,
+        "y_mm": 25.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "R1",
+        "value": "1kΩ",
+        "category": "resistor",
+        "package": "0805",
+        "description": "LED akım sınırlayıcı direnç",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "electrical_type": "passive"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "electrical_type": "passive"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 10.0,
+        "y_mm": 40.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      },
+      {
+        "ref": "D1",
+        "value": "Green LED",
+        "category": "led",
+        "package": "0805",
+        "description": "Güç gösterge LED'i",
+        "manufacturer": "",
+        "manufacturer_pn": "",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "electrical_type": "passive"
+          },
+          {
+            "number": "2",
+            "name": "K",
+            "electrical_type": "passive"
+          }
+        ],
+        "footprint": null,
+        "datasheet_url": "",
+        "x_mm": 25.0,
+        "y_mm": 40.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu"
+      }
+    ],
+    "nets": [
+      {
+        "name": "VIN_5V",
+        "connections": [
+          {
+            "ref": "J1",
+            "pin": "1"
+          },
+          {
+            "ref": "U1",
+            "pin": "3"
+          },
+          {
+            "ref": "C1",
+            "pin": "1"
+          },
+          {
+            "ref": "C3",
+            "pin": "1"
+          }
+        ]
+      },
+      {
+        "name": "VOUT_3V3",
+        "connections": [
+          {
+            "ref": "U1",
+            "pin": "2"
+          },
+          {
+            "ref": "J2",
+            "pin": "1"
+          },
+          {
+            "ref": "C2",
+            "pin": "1"
+          },
+          {
+            "ref": "R1",
+            "pin": "1"
+          }
+        ]
+      },
+      {
+        "name": "LED_A",
+        "connections": [
+          {
+            "ref": "R1",
+            "pin": "2"
+          },
+          {
+            "ref": "D1",
+            "pin": "1"
+          }
+        ]
+      },
+      {
+        "name": "GND",
+        "connections": [
+          {
+            "ref": "J1",
+            "pin": "2"
+          },
+          {
+            "ref": "J2",
+            "pin": "2"
+          },
+          {
+            "ref": "U1",
+            "pin": "1"
+          },
+          {
+            "ref": "C1",
+            "pin": "2"
+          },
+          {
+            "ref": "C2",
+            "pin": "2"
+          },
+          {
+            "ref": "C3",
+            "pin": "2"
+          },
+          {
+            "ref": "D1",
+            "pin": "2"
+          }
+        ]
+      }
+    ],
+    "board": {
+      "width_mm": 40.0,
+      "height_mm": 25.0,
+      "layers": 2,
+      "thickness_mm": 1.6,
+      "shape": "rectangular"
+    },
+    "constraints": {
+      "trace_width_mm": 0.4,
+      "clearance_mm": 0.2,
+      "via_diameter_mm": 0.8,
+      "via_drill_mm": 0.4,
+      "min_trace_width_mm": 0.15,
+      "min_clearance_mm": 0.15,
+      "copper_weight_oz": 1.0,
+      "impedance_controlled": false
+    }
+  },
+  "board": {
+    "outline": {
+      "x_mm": 0.0,
+      "y_mm": 0.0,
+      "width_mm": 40.0,
+      "height_mm": 25.0
+    },
+    "layers": 2,
+    "thickness_mm": 1.6,
+    "components": [
+      {
+        "ref": "J1",
+        "value": "Conn_01x02",
+        "footprint": "PinHeader_1x02_P2.54mm",
+        "x_mm": 10.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "VIN_5V",
+            "x_mm": 9.365,
+            "y_mm": 10.0
+          },
+          {
+            "number": "2",
+            "net": "GND",
+            "x_mm": 10.635,
+            "y_mm": 10.0
+          }
+        ]
+      },
+      {
+        "ref": "J2",
+        "value": "Conn_01x02",
+        "footprint": "PinHeader_1x02_P2.54mm",
+        "x_mm": 25.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "VOUT_3V3",
+            "x_mm": 24.365,
+            "y_mm": 10.0
+          },
+          {
+            "number": "2",
+            "net": "GND",
+            "x_mm": 25.635,
+            "y_mm": 10.0
+          }
+        ]
+      },
+      {
+        "ref": "U1",
+        "value": "AMS1117-3.3",
+        "footprint": "SOT-223",
+        "x_mm": 40.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "GND",
+            "x_mm": 38.73,
+            "y_mm": 10.0
+          },
+          {
+            "number": "2",
+            "net": "VOUT_3V3",
+            "x_mm": 40.0,
+            "y_mm": 10.0
+          },
+          {
+            "number": "3",
+            "net": "VIN_5V",
+            "x_mm": 41.27,
+            "y_mm": 10.0
+          }
+        ]
+      },
+      {
+        "ref": "C1",
+        "value": "10µF",
+        "footprint": "0805",
+        "x_mm": 10.0,
+        "y_mm": 25.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "VIN_5V",
+            "x_mm": 9.365,
+            "y_mm": 25.0
+          },
+          {
+            "number": "2",
+            "net": "GND",
+            "x_mm": 10.635,
+            "y_mm": 25.0
+          }
+        ]
+      },
+      {
+        "ref": "C2",
+        "value": "10µF",
+        "footprint": "0805",
+        "x_mm": 25.0,
+        "y_mm": 25.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "VOUT_3V3",
+            "x_mm": 24.365,
+            "y_mm": 25.0
+          },
+          {
+            "number": "2",
+            "net": "GND",
+            "x_mm": 25.635,
+            "y_mm": 25.0
+          }
+        ]
+      },
+      {
+        "ref": "C3",
+        "value": "100nF",
+        "footprint": "0805",
+        "x_mm": 40.0,
+        "y_mm": 25.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "VIN_5V",
+            "x_mm": 39.365,
+            "y_mm": 25.0
+          },
+          {
+            "number": "2",
+            "net": "GND",
+            "x_mm": 40.635,
+            "y_mm": 25.0
+          }
+        ]
+      },
+      {
+        "ref": "R1",
+        "value": "1kΩ",
+        "footprint": "0805",
+        "x_mm": 10.0,
+        "y_mm": 40.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "VOUT_3V3",
+            "x_mm": 9.365,
+            "y_mm": 40.0
+          },
+          {
+            "number": "2",
+            "net": "LED_A",
+            "x_mm": 10.635,
+            "y_mm": 40.0
+          }
+        ]
+      },
+      {
+        "ref": "D1",
+        "value": "Green LED",
+        "footprint": "0805",
+        "x_mm": 25.0,
+        "y_mm": 40.0,
+        "rotation_deg": 0.0,
+        "layer": "F.Cu",
+        "pads": [
+          {
+            "number": "1",
+            "net": "LED_A",
+            "x_mm": 24.365,
+            "y_mm": 40.0
+          },
+          {
+            "number": "2",
+            "net": "GND",
+            "x_mm": 25.635,
+            "y_mm": 40.0
+          }
+        ]
+      }
+    ],
+    "traces": [
+      {
+        "net": "GND",
+        "start": [
+          10.635,
+          10.0
+        ],
+        "end": [
+          25.635,
+          10.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "GND",
+        "start": [
+          25.635,
+          10.0
+        ],
+        "end": [
+          38.73,
+          10.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "GND",
+        "start": [
+          38.73,
+          10.0
+        ],
+        "end": [
+          10.635,
+          25.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "GND",
+        "start": [
+          10.635,
+          25.0
+        ],
+        "end": [
+          25.635,
+          25.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "GND",
+        "start": [
+          25.635,
+          25.0
+        ],
+        "end": [
+          40.635,
+          25.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "GND",
+        "start": [
+          40.635,
+          25.0
+        ],
+        "end": [
+          25.635,
+          40.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "LED_A",
+        "start": [
+          10.635,
+          40.0
+        ],
+        "end": [
+          24.365,
+          40.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "VIN_5V",
+        "start": [
+          9.365,
+          10.0
+        ],
+        "end": [
+          41.27,
+          10.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "VIN_5V",
+        "start": [
+          41.27,
+          10.0
+        ],
+        "end": [
+          9.365,
+          25.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "VIN_5V",
+        "start": [
+          9.365,
+          25.0
+        ],
+        "end": [
+          39.365,
+          25.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "VOUT_3V3",
+        "start": [
+          24.365,
+          10.0
+        ],
+        "end": [
+          40.0,
+          10.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "VOUT_3V3",
+        "start": [
+          40.0,
+          10.0
+        ],
+        "end": [
+          24.365,
+          25.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      },
+      {
+        "net": "VOUT_3V3",
+        "start": [
+          24.365,
+          25.0
+        ],
+        "end": [
+          9.365,
+          40.0
+        ],
+        "width_mm": 0.4,
+        "layer": "F.Cu"
+      }
+    ],
+    "vias": []
+  }
+}
