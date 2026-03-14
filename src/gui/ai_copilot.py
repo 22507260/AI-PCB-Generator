@@ -63,26 +63,34 @@ def run_erc(spec: CircuitSpec | None) -> list[ERCViolation]:
 
     comp_map = {c.ref: c for c in spec.components}
 
+    def _pin_connected(ref: str, pin) -> bool:
+        """Check if a pin is connected via number or name."""
+        if f"{ref}:{pin.number}" in pin_to_nets:
+            return True
+        if pin.name and f"{ref}:{pin.name}" in pin_to_nets:
+            return True
+        return False
+
     # ── Check 1: Unconnected pins ──
     for comp in spec.components:
         for pin in comp.pins:
-            key = f"{comp.ref}:{pin.number}"
-            if key not in pin_to_nets:
-                # Power pins MUST be connected
-                if pin.electrical_type in ("power_in", "power_out"):
-                    violations.append(ERCViolation(
-                        severity=Severity.ERROR,
-                        code="ERC001",
-                        message=tr("erc_unconnected_power",
-                                   ref=comp.ref, pin=pin.name or pin.number),
-                        refs=[comp.ref],
-                    ))
-                elif pin.electrical_type in ("input", "output"):
-                    violations.append(ERCViolation(
-                        severity=Severity.WARNING,
-                        code="ERC002",
-                        message=tr("erc_unconnected_pin",
-                                   ref=comp.ref, pin=pin.name or pin.number),
+            if _pin_connected(comp.ref, pin):
+                continue
+            # Power pins MUST be connected
+            if pin.electrical_type in ("power_in", "power_out"):
+                violations.append(ERCViolation(
+                    severity=Severity.ERROR,
+                    code="ERC001",
+                    message=tr("erc_unconnected_power",
+                               ref=comp.ref, pin=pin.name or pin.number),
+                    refs=[comp.ref],
+                ))
+            elif pin.electrical_type in ("input", "output"):
+                violations.append(ERCViolation(
+                    severity=Severity.WARNING,
+                    code="ERC002",
+                    message=tr("erc_unconnected_pin",
+                               ref=comp.ref, pin=pin.name or pin.number),
                         refs=[comp.ref],
                     ))
 
