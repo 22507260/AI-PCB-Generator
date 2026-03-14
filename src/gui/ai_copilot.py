@@ -143,6 +143,9 @@ def run_erc(spec: CircuitSpec | None) -> list[ERCViolation]:
             comp = comp_map.get(conn.ref)
             if not comp:
                 continue
+            # Connectors are pass-through — they don't drive signals
+            if comp.category.value in ("connector", "switch", "fuse"):
+                continue
             for pin in comp.pins:
                 if pin.number == conn.pin and pin.electrical_type == "output":
                     outputs.append(f"{comp.ref}:{pin.name or pin.number}")
