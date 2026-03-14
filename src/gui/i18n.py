@@ -207,6 +207,34 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim_freq_start": "Başlangıç Frekansı",
         "sim_freq_stop": "Bitiş Frekansı",
         "sim_source": "Kaynak",
+
+        # ── Schematic Editor ──
+        "action_undo": "Geri Al",
+        "action_redo": "Yinele",
+        "action_delete": "Sil",
+        "toolbar_wire": "🔗 Kablo Çiz",
+        "palette_title": "🧩 Komponent Paleti",
+        "palette_search": "Komponent ara...",
+        "edit_component_title": "Komponent Düzenle",
+        "edit_ref_label": "Referans:",
+        "edit_value_label": "Değer:",
+
+        # ── AI Co-Pilot / ERC ──
+        "copilot_title": "🤖 AI Co-Pilot",
+        "copilot_run_erc": "🔍 ERC Çalıştır",
+        "copilot_no_issues": "✅ Sorun bulunamadı — devre temiz!",
+        "copilot_issues_found": "⚠ {errors} hata, {warnings} uyarı bulundu",
+        "erc_unconnected_power": "{ref} üzerindeki güç pini ({pin}) bağlı değil",
+        "erc_unconnected_pin": "{ref} üzerindeki {pin} pini bağlı değil",
+        "erc_led_no_resistor": "{ref} LED'inin akım sınırlayıcı direnci yok",
+        "erc_fix_add_resistor": "Seri direnç ekle",
+        "erc_no_ground": "Devrede toprak (GND) bağlantısı yok",
+        "erc_fix_add_ground": "GND net'i ekle",
+        "erc_no_power": "Devrede güç kaynağı bulunamadı",
+        "erc_multiple_outputs": "{net} net'inde birden fazla çıkış: {outputs}",
+        "erc_no_decoupling": "{ref} IC'sinin dekuplaj kapasitörü yok",
+        "erc_fix_add_cap": "100nF dekuplaj kapasitörü ekle",
+        "erc_single_pin_net": "{net} net'ine yalnızca bir pin bağlı",
     },
 
     "en": {
@@ -411,6 +439,34 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "sim_freq_start": "Start Frequency",
         "sim_freq_stop": "Stop Frequency",
         "sim_source": "Source",
+
+        # ── Schematic Editor ──
+        "action_undo": "Undo",
+        "action_redo": "Redo",
+        "action_delete": "Delete",
+        "toolbar_wire": "🔗 Draw Wire",
+        "palette_title": "🧩 Component Palette",
+        "palette_search": "Search components...",
+        "edit_component_title": "Edit Component",
+        "edit_ref_label": "Reference:",
+        "edit_value_label": "Value:",
+
+        # ── AI Co-Pilot / ERC ──
+        "copilot_title": "🤖 AI Co-Pilot",
+        "copilot_run_erc": "🔍 Run ERC",
+        "copilot_no_issues": "✅ No issues found — circuit is clean!",
+        "copilot_issues_found": "⚠ {errors} error(s), {warnings} warning(s) found",
+        "erc_unconnected_power": "Power pin ({pin}) on {ref} is unconnected",
+        "erc_unconnected_pin": "Pin {pin} on {ref} is unconnected",
+        "erc_led_no_resistor": "LED {ref} has no current-limiting resistor",
+        "erc_fix_add_resistor": "Add series resistor",
+        "erc_no_ground": "Circuit has no ground (GND) connection",
+        "erc_fix_add_ground": "Add GND net",
+        "erc_no_power": "No power source found in circuit",
+        "erc_multiple_outputs": "Multiple outputs on net {net}: {outputs}",
+        "erc_no_decoupling": "IC {ref} has no decoupling capacitor",
+        "erc_fix_add_cap": "Add 100nF decoupling capacitor",
+        "erc_single_pin_net": "Net {net} has only one pin connected",
     },
 }
 

@@ -22,6 +22,8 @@ from src.gui.pcb_view import PCBView
 from src.gui.view3d import View3D
 from src.gui.simulation_view import SimulationView
 from src.gui.component_panel import ComponentPanel
+from src.gui.component_palette import ComponentPalette
+from src.gui.ai_copilot import AICoPilotPanel
 from src.gui.export_dialog import ExportDialog
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.i18n import tr, Translator
@@ -92,6 +94,22 @@ class MainWindow(QMainWindow):
         # Edit menu
         self._edit_menu = menu.addMenu("")
 
+        self._act_undo = QAction("", self)
+        self._act_undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self._edit_menu.addAction(self._act_undo)
+
+        self._act_redo = QAction("", self)
+        self._act_redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self._edit_menu.addAction(self._act_redo)
+
+        self._edit_menu.addSeparator()
+
+        self._act_delete = QAction("", self)
+        self._act_delete.setShortcut(QKeySequence.StandardKey.Delete)
+        self._edit_menu.addAction(self._act_delete)
+
+        self._edit_menu.addSeparator()
+
         self._act_settings = QAction("", self)
         self._act_settings.setShortcut(QKeySequence("Ctrl+,"))
         self._act_settings.triggered.connect(self._open_settings)
@@ -134,6 +152,10 @@ class MainWindow(QMainWindow):
         self._toolbar.addSeparator()
         self._tb_settings = self._toolbar.addAction("")
         self._tb_settings.triggered.connect(self._open_settings)
+        self._toolbar.addSeparator()
+        self._tb_wire = self._toolbar.addAction("")
+        self._tb_wire.setCheckable(True)
+        self._tb_wire.toggled.connect(self._toggle_wire_mode)
 
     def _setup_central(self):
         central = QWidget()
@@ -141,7 +163,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Main splitter: left (input + BOM) | right (viewers)
+        # Main splitter: left (input + palette + BOM) | right (viewers)
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left panel
@@ -152,17 +174,42 @@ class MainWindow(QMainWindow):
         self._input_panel.status_message.connect(self._set_status)
         left_splitter.addWidget(self._input_panel)
 
+        self._component_palette = ComponentPalette()
+        left_splitter.addWidget(self._component_palette)
+
         self._component_panel = ComponentPanel()
         left_splitter.addWidget(self._component_panel)
 
-        left_splitter.setSizes([400, 300])
+        left_splitter.setSizes([300, 250, 200])
         splitter.addWidget(left_splitter)
 
         # Right panel — tabbed viewers
         self._tab_widget = QTabWidget()
 
+        # Schematic tab: editor + AI Co-Pilot
+        schematic_container = QWidget()
+        sch_layout = QVBoxLayout(schematic_container)
+        sch_layout.setContentsMargins(0, 0, 0, 0)
+        sch_splitter = QSplitter(Qt.Orientation.Vertical)
+
         self._schematic_view = SchematicView()
-        self._tab_widget.addTab(self._schematic_view, "")
+        self._schematic_view.circuit_modified.connect(self._on_circuit_modified)
+        sch_splitter.addWidget(self._schematic_view)
+
+        self._copilot = AICoPilotPanel()
+        self._copilot.component_highlight.connect(
+            self._schematic_view.highlight_component
+        )
+        sch_splitter.addWidget(self._copilot)
+
+        sch_splitter.setSizes([500, 150])
+        sch_layout.addWidget(sch_splitter)
+        self._tab_widget.addTab(schematic_container, "")
+
+        # Connect undo/redo actions to schematic undo stack
+        self._act_undo.triggered.connect(self._schematic_view.undo_stack.undo)
+        self._act_redo.triggered.connect(self._schematic_view.undo_stack.redo)
+        self._act_delete.triggered.connect(self._schematic_view._delete_selected)
 
         self._pcb_view = PCBView()
         self._tab_widget.addTab(self._pcb_view, "")
@@ -204,6 +251,9 @@ class MainWindow(QMainWindow):
         # Load circuit into simulation view
         self._simulation_view.load_circuit(spec)
 
+        # Run ERC (AI Co-Pilot)
+        self._copilot.run_erc(spec)
+
         # Run DRC
         drc = DRCEngine(self._board)
         violations = drc.run_all()
@@ -217,6 +267,33 @@ class MainWindow(QMainWindow):
             self._set_status(tr("status_drc_pass"))
 
         self._tab_widget.setCurrentIndex(0)  # Show schematic first
+
+    def _on_circuit_modified(self, spec: CircuitSpec):
+        """Handle changes from the schematic editor."""
+        self._spec = spec
+        log.info("Circuit modified: %d components, %d nets",
+                 len(spec.components), len(spec.nets))
+
+        # Update downstream views
+        self._component_panel.load_circuit(spec)
+        self._copilot.run_erc(spec)
+
+        # Regenerate PCB if we have enough data
+        if spec.components and spec.nets:
+            try:
+                gen = PCBGenerator(spec)
+                self._board = gen.generate()
+                self._pcb_view.load_board(self._board)
+                self._view_3d.load_board(self._board)
+                self._simulation_view.load_circuit(spec)
+            except Exception as e:
+                log.warning("PCB regeneration failed: %s", e)
+
+    def _toggle_wire_mode(self, checked: bool):
+        """Toggle wire drawing mode on the schematic view."""
+        self._schematic_view.set_wire_mode(checked)
+        if checked:
+            self._tab_widget.setCurrentIndex(0)
 
     def _zoom_active_view(self, factor: float) -> None:
         """Scale the currently visible graphics view."""
@@ -302,6 +379,9 @@ class MainWindow(QMainWindow):
         self._act_settings.setText(tr("action_settings"))
         self._act_zoom_in.setText(tr("action_zoom_in"))
         self._act_zoom_out.setText(tr("action_zoom_out"))
+        self._act_undo.setText(tr("action_undo"))
+        self._act_redo.setText(tr("action_redo"))
+        self._act_delete.setText(tr("action_delete"))
         self._act_about.setText(tr("action_about"))
         self._toolbar.setWindowTitle(tr("toolbar_main"))
         self._tb_new.setText(tr("toolbar_new"))
@@ -309,8 +389,11 @@ class MainWindow(QMainWindow):
         self._tb_save.setText(tr("toolbar_save"))
         self._tb_export.setText(tr("toolbar_export"))
         self._tb_settings.setText(tr("toolbar_settings"))
+        self._tb_wire.setText(tr("toolbar_wire"))
         self._tab_widget.setTabText(0, tr("tab_schematic"))
         self._tab_widget.setTabText(1, tr("tab_pcb_layout"))
         self._tab_widget.setTabText(2, tr("tab_3d_view"))
         self._tab_widget.setTabText(3, tr("tab_simulation"))
+        self._copilot.retranslate()
+        self._component_palette.retranslate()
         self._statusbar.showMessage(tr("status_ready"))

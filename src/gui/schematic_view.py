@@ -1,20 +1,31 @@
-"""Schematic viewer — grid-based layout with orthogonal wire routing."""
+"""Schematic editor — interactive drag-and-drop editor with wire routing."""
 
 from __future__ import annotations
 
+import json
 import math
 import heapq
 from collections import defaultdict
 from typing import Optional
 
-from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsItem
-from PySide6.QtCore import Qt, QRectF, QPointF
+from PySide6.QtWidgets import (
+    QGraphicsView, QGraphicsScene, QGraphicsItem,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QFormLayout,
+)
+from PySide6.QtCore import Qt, QRectF, QPointF, Signal, QByteArray
 from PySide6.QtGui import (
     QPainter, QPen, QBrush, QColor, QFont, QWheelEvent,
-    QPainterPath, QLinearGradient,
+    QPainterPath, QLinearGradient, QUndoStack, QUndoCommand,
 )
 
-from src.ai.schemas import CircuitSpec, ComponentSpec, NetSpec
+from src.gui.i18n import tr
+
+from src.ai.schemas import (
+    CircuitSpec, ComponentSpec, NetSpec, PinSpec, PinRef,
+    ComponentCategory,
+)
+from src.gui.component_palette import MIME_TYPE, _PIN_TEMPLATES
 
 # ── Palette ──
 _PAL = {
@@ -122,7 +133,45 @@ class ComponentItem(QGraphicsItem):
         self._body = side * self.PIN_SP + 10
         self._h = self._hdr + self._body
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
         self.setToolTip(f"{comp.ref}: {comp.value}\n{comp.description}")
+        self._drag_start_pos: QPointF | None = None
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            # Snap to grid (20px)
+            grid = 20.0
+            x = round(value.x() / grid) * grid
+            y = round(value.y() / grid) * grid
+            return QPointF(x, y)
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
+            # Tell the view to re-route wires
+            view = self.scene()
+            if view:
+                for v in view.views():
+                    if isinstance(v, SchematicView) and v._interactive:
+                        v._schedule_reroute()
+        return super().itemChange(change, value)
+
+    def mousePressEvent(self, event):
+        self._drag_start_pos = self.pos()
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        if self._drag_start_pos and self._drag_start_pos != self.pos():
+            for v in self.scene().views():
+                if isinstance(v, SchematicView) and v._interactive:
+                    v._push_move_cmd(self, self._drag_start_pos, self.pos())
+        self._drag_start_pos = None
+
+    def mouseDoubleClickEvent(self, event):
+        """Open inline editor for value & ref."""
+        for v in self.scene().views():
+            if isinstance(v, SchematicView) and v._interactive:
+                v._edit_component(self)
+        event.accept()
 
     def width(self):
         return self._w + 2 * self.WIRE_LEN + 36
@@ -243,6 +292,27 @@ class ComponentItem(QGraphicsItem):
             return self.mapToScene(QPointF(self._w + self.WIRE_LEN,
                                            self._hdr + 14))
         return self.mapToScene(QPointF(self._w / 2, self._h / 2))
+
+    def pin_at_scene_pos(self, scene_pos: QPointF, radius: float = 10.0
+                         ) -> PinSpec | None:
+        """Return the PinSpec closest to *scene_pos* if within *radius*."""
+        best_pin: PinSpec | None = None
+        best_d = radius
+        for i, p in enumerate(self._left):
+            pp = self.mapToScene(QPointF(-self.WIRE_LEN,
+                                         self._hdr + 14 + i * self.PIN_SP))
+            d = math.hypot(pp.x() - scene_pos.x(), pp.y() - scene_pos.y())
+            if d < best_d:
+                best_d = d
+                best_pin = p
+        for i, p in enumerate(self._right):
+            pp = self.mapToScene(QPointF(self._w + self.WIRE_LEN,
+                                         self._hdr + 14 + i * self.PIN_SP))
+            d = math.hypot(pp.x() - scene_pos.x(), pp.y() - scene_pos.y())
+            if d < best_d:
+                best_d = d
+                best_pin = p
+        return best_pin
 
 
 # =====================================================================
@@ -715,47 +785,562 @@ def _route_nets(spec: CircuitSpec, comp_items: dict[str, 'ComponentItem'],
 
 
 # =====================================================================
-# SchematicView
+# Undo / Redo Commands
+# =====================================================================
+
+class _AddComponentCmd(QUndoCommand):
+    def __init__(self, view: 'SchematicView', comp: ComponentSpec,
+                 pos: QPointF, text: str = "Add Component"):
+        super().__init__(text)
+        self._view = view
+        self._comp = comp
+        self._pos = pos
+
+    def redo(self):
+        self._view._spec.components.append(self._comp)
+        item = ComponentItem(self._comp)
+        item.setPos(self._pos)
+        self._view._scene.addItem(item)
+        self._view._comp_items[self._comp.ref] = item
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+    def undo(self):
+        item = self._view._comp_items.pop(self._comp.ref, None)
+        if item:
+            self._view._scene.removeItem(item)
+        self._view._spec.components = [
+            c for c in self._view._spec.components if c.ref != self._comp.ref
+        ]
+        # Remove nets referencing this component
+        self._view._spec.nets = [
+            n for n in self._view._spec.nets
+            if not all(c.ref == self._comp.ref for c in n.connections)
+        ]
+        for net in self._view._spec.nets:
+            net.connections = [c for c in net.connections if c.ref != self._comp.ref]
+        self._view._spec.nets = [n for n in self._view._spec.nets if len(n.connections) >= 2]
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+
+class _MoveComponentCmd(QUndoCommand):
+    def __init__(self, view: 'SchematicView', item: ComponentItem,
+                 old_pos: QPointF, new_pos: QPointF):
+        super().__init__("Move Component")
+        self._view = view
+        self._item = item
+        self._old = old_pos
+        self._new = new_pos
+        self._first = True
+
+    def redo(self):
+        if self._first:
+            self._first = False
+            return  # item is already at new pos
+        self._item.setPos(self._new)
+        self._view._reroute_wires()
+
+    def undo(self):
+        self._item.setPos(self._old)
+        self._view._reroute_wires()
+
+
+class _DeleteComponentCmd(QUndoCommand):
+    def __init__(self, view: 'SchematicView', item: ComponentItem):
+        super().__init__("Delete Component")
+        self._view = view
+        self._comp = item.comp
+        self._pos = item.pos()
+        self._removed_nets: list[NetSpec] = []
+
+    def redo(self):
+        item = self._view._comp_items.pop(self._comp.ref, None)
+        if item:
+            self._view._scene.removeItem(item)
+        self._view._spec.components = [
+            c for c in self._view._spec.components if c.ref != self._comp.ref
+        ]
+        # Save and remove affected nets
+        self._removed_nets = []
+        for net in list(self._view._spec.nets):
+            had = any(c.ref == self._comp.ref for c in net.connections)
+            if had:
+                self._removed_nets.append(net.model_copy(deep=True))
+                net.connections = [c for c in net.connections if c.ref != self._comp.ref]
+        self._view._spec.nets = [n for n in self._view._spec.nets if len(n.connections) >= 2]
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+    def undo(self):
+        self._view._spec.components.append(self._comp)
+        item = ComponentItem(self._comp)
+        item.setPos(self._pos)
+        self._view._scene.addItem(item)
+        self._view._comp_items[self._comp.ref] = item
+        # Restore removed nets
+        for net in self._removed_nets:
+            # Check if net with same name exists
+            existing = None
+            for n in self._view._spec.nets:
+                if n.name == net.name:
+                    existing = n
+                    break
+            if existing:
+                existing.connections = net.connections
+            else:
+                self._view._spec.nets.append(net)
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+
+class _EditComponentCmd(QUndoCommand):
+    def __init__(self, view: 'SchematicView', item: ComponentItem,
+                 old_ref: str, old_val: str, new_ref: str, new_val: str):
+        super().__init__("Edit Component")
+        self._view = view
+        self._item = item
+        self._old_ref = old_ref
+        self._old_val = old_val
+        self._new_ref = new_ref
+        self._new_val = new_val
+
+    def redo(self):
+        self._apply(self._old_ref, self._new_ref, self._new_val)
+
+    def undo(self):
+        self._apply(self._new_ref, self._old_ref, self._old_val)
+
+    def _apply(self, from_ref: str, to_ref: str, value: str):
+        self._item.comp.ref = to_ref
+        self._item.comp.value = value
+        # Update comp_items dict
+        self._view._comp_items.pop(from_ref, None)
+        self._view._comp_items[to_ref] = self._item
+        # Update net references
+        for net in self._view._spec.nets:
+            for conn in net.connections:
+                if conn.ref == from_ref:
+                    conn.ref = to_ref
+        self._item.setToolTip(f"{to_ref}: {value}\n{self._item.comp.description}")
+        self._item.update()
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+
+class _AddWireCmd(QUndoCommand):
+    def __init__(self, view: 'SchematicView', net_name: str,
+                 conn_a: PinRef, conn_b: PinRef):
+        super().__init__("Add Wire")
+        self._view = view
+        self._net_name = net_name
+        self._a = conn_a
+        self._b = conn_b
+
+    def redo(self):
+        # Find or create the net
+        net = None
+        for n in self._view._spec.nets:
+            if n.name == self._net_name:
+                net = n
+                break
+        if net is None:
+            net = NetSpec(name=self._net_name, connections=[self._a, self._b])
+            self._view._spec.nets.append(net)
+        else:
+            for c in [self._a, self._b]:
+                if not any(x.ref == c.ref and x.pin == c.pin for x in net.connections):
+                    net.connections.append(c)
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+    def undo(self):
+        for net in self._view._spec.nets:
+            if net.name == self._net_name:
+                net.connections = [
+                    c for c in net.connections
+                    if not (c.ref == self._a.ref and c.pin == self._a.pin)
+                    and not (c.ref == self._b.ref and c.pin == self._b.pin)
+                ]
+                break
+        self._view._spec.nets = [n for n in self._view._spec.nets if len(n.connections) >= 2]
+        self._view._reroute_wires()
+        self._view.circuit_modified.emit(self._view._spec)
+
+
+# =====================================================================
+# Component Edit Dialog
+# =====================================================================
+
+class _CompEditDialog(QDialog):
+    """Small dialog for editing component ref and value."""
+
+    def __init__(self, comp: ComponentSpec, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("edit_component_title"))
+        self.setStyleSheet(
+            "QDialog { background: #161b22; }"
+            "QLabel { color: #e6edf3; }"
+            "QLineEdit { background: #0d1117; border: 1px solid #30363d; "
+            "border-radius: 4px; padding: 4px; color: #e6edf3; }"
+            "QPushButton { background: #238636; color: white; border: none; "
+            "border-radius: 4px; padding: 5px 16px; }"
+            "QPushButton:hover { background: #2ea043; }"
+            "QPushButton#cancel { background: #21262d; }"
+        )
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.ref_edit = QLineEdit(comp.ref)
+        self.val_edit = QLineEdit(comp.value)
+        form.addRow(tr("edit_ref_label"), self.ref_edit)
+        form.addRow(tr("edit_value_label"), self.val_edit)
+        layout.addLayout(form)
+
+        btns = QHBoxLayout()
+        ok = QPushButton(tr("button_save"))
+        ok.clicked.connect(self.accept)
+        cancel = QPushButton(tr("button_cancel"))
+        cancel.setObjectName("cancel")
+        cancel.clicked.connect(self.reject)
+        btns.addStretch()
+        btns.addWidget(cancel)
+        btns.addWidget(ok)
+        layout.addLayout(btns)
+
+
+# =====================================================================
+# SchematicView — Interactive Editor
 # =====================================================================
 
 class SchematicView(QGraphicsView):
+    """Schematic editor with drag-and-drop, wire drawing, undo/redo."""
+
+    circuit_modified = Signal(object)  # emits CircuitSpec
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setBackgroundBrush(QBrush(_PAL["bg"]))
         self.setMinimumSize(400, 300)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
+        self.setAcceptDrops(True)
+
         self._comp_items: dict[str, ComponentItem] = {}
         self._zoom = 1.0
+        self._spec: CircuitSpec | None = None
+        self._interactive = True
+
+        # Undo / Redo
+        self._undo_stack = QUndoStack(self)
+
+        # Wire drawing state
+        self._wire_mode = False
+        self._wire_start_ref: str | None = None
+        self._wire_start_pin: PinSpec | None = None
+        self._wire_start_pos: QPointF | None = None
+        self._wire_rubber: QGraphicsItem | None = None
+
+        # Reroute debounce
+        self._reroute_pending = False
+        self._ref_counter: dict[str, int] = {}  # ref_prefix → next number
+
+    @property
+    def undo_stack(self) -> QUndoStack:
+        return self._undo_stack
+
+    # ==================================================================
+    # Load circuit (from AI or file)
+    # ==================================================================
 
     def load_circuit(self, spec: CircuitSpec):
+        self._undo_stack.clear()
         self._scene.clear()
         self._comp_items.clear()
+        self._spec = spec.model_copy(deep=True)
+        self._update_ref_counter()
+
         if not spec.components:
             return
 
         layout = _grid_layout(spec)
 
-        # Place component items
-        for comp in spec.components:
+        for comp in self._spec.components:
             item = ComponentItem(comp)
             x, y = layout.get(comp.ref, (0, 0))
             item.setPos(x, y)
             self._scene.addItem(item)
             self._comp_items[comp.ref] = item
 
-        # ── Route wires (maze router) ──
-        _route_nets(spec, self._comp_items, self._scene)
+        _route_nets(self._spec, self._comp_items, self._scene)
 
-        # ── Fit view ──
         rect = self._scene.itemsBoundingRect().adjusted(-100, -100, 100, 100)
         self._scene.setSceneRect(rect)
         self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+
+    def _update_ref_counter(self):
+        """Rebuild ref counter from current spec."""
+        self._ref_counter.clear()
+        if not self._spec:
+            return
+        for comp in self._spec.components:
+            prefix = ""
+            num_str = ""
+            for ch in comp.ref:
+                if ch.isdigit():
+                    num_str += ch
+                else:
+                    if num_str:
+                        break
+                    prefix += ch
+            n = int(num_str) if num_str else 0
+            self._ref_counter[prefix] = max(self._ref_counter.get(prefix, 0), n)
+
+    def _next_ref(self, prefix: str) -> str:
+        n = self._ref_counter.get(prefix, 0) + 1
+        self._ref_counter[prefix] = n
+        return f"{prefix}{n}"
+
+    # ==================================================================
+    # Wire Drawing Mode
+    # ==================================================================
+
+    def set_wire_mode(self, on: bool):
+        self._wire_mode = on
+        if on:
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        else:
+            self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            self._cancel_wire()
+
+    def _cancel_wire(self):
+        if self._wire_rubber:
+            self._scene.removeItem(self._wire_rubber)
+            self._wire_rubber = None
+        self._wire_start_ref = None
+        self._wire_start_pin = None
+        self._wire_start_pos = None
+
+    def _find_pin_at(self, scene_pos: QPointF) -> tuple[ComponentItem | None, PinSpec | None]:
+        """Find the component + pin nearest to scene_pos."""
+        for ref, item in self._comp_items.items():
+            pin = item.pin_at_scene_pos(scene_pos, radius=12.0)
+            if pin is not None:
+                return item, pin
+        return None, None
+
+    # ==================================================================
+    # Mouse Events
+    # ==================================================================
+
+    def mousePressEvent(self, event):
+        if self._wire_mode and event.button() == Qt.MouseButton.LeftButton:
+            sp = self.mapToScene(event.pos())
+            item, pin = self._find_pin_at(sp)
+            if item and pin:
+                if self._wire_start_pin is None:
+                    # Start wire
+                    self._wire_start_ref = item.comp.ref
+                    self._wire_start_pin = pin
+                    self._wire_start_pos = item.get_pin_pos(pin.number)
+                else:
+                    # End wire
+                    if item.comp.ref != self._wire_start_ref or pin.number != self._wire_start_pin.number:
+                        self._finish_wire(item, pin)
+                    self._cancel_wire()
+            else:
+                self._cancel_wire()
+            event.accept()
+            return
+        # Right-click cancels wire mode
+        if self._wire_mode and event.button() == Qt.MouseButton.RightButton:
+            self._cancel_wire()
+            self.set_wire_mode(False)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._wire_mode and self._wire_start_pos:
+            sp = self.mapToScene(event.pos())
+            if self._wire_rubber:
+                self._scene.removeItem(self._wire_rubber)
+            pen = QPen(_PAL["wire"], 1.5, Qt.PenStyle.DashLine)
+            path = QPainterPath(self._wire_start_pos)
+            # L-route preview
+            path.lineTo(QPointF(sp.x(), self._wire_start_pos.y()))
+            path.lineTo(sp)
+            self._wire_rubber = self._scene.addPath(path, pen)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def _finish_wire(self, end_item: ComponentItem, end_pin: PinSpec):
+        """Create a net/connection between two pins."""
+        if not self._spec:
+            return
+        a_ref = self._wire_start_ref
+        a_pin = self._wire_start_pin.number
+        b_ref = end_item.comp.ref
+        b_pin = end_pin.number
+
+        conn_a = PinRef(ref=a_ref, pin=a_pin)
+        conn_b = PinRef(ref=b_ref, pin=b_pin)
+
+        # Find existing net for either pin
+        net_name = None
+        for net in self._spec.nets:
+            for c in net.connections:
+                if (c.ref == a_ref and c.pin == a_pin) or \
+                   (c.ref == b_ref and c.pin == b_pin):
+                    net_name = net.name
+                    break
+            if net_name:
+                break
+
+        if not net_name:
+            # Generate new net name
+            existing = {n.name for n in self._spec.nets}
+            idx = 1
+            while f"NET{idx}" in existing:
+                idx += 1
+            net_name = f"NET{idx}"
+
+        self._undo_stack.push(_AddWireCmd(self, net_name, conn_a, conn_b))
+
+    # ==================================================================
+    # Keyboard Events
+    # ==================================================================
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
+            self._delete_selected()
+            event.accept()
+            return
+        if event.key() == Qt.Key.Key_Escape:
+            if self._wire_mode:
+                self._cancel_wire()
+                self.set_wire_mode(False)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _delete_selected(self):
+        """Delete all selected components."""
+        for item in list(self._scene.selectedItems()):
+            if isinstance(item, ComponentItem):
+                self._undo_stack.push(_DeleteComponentCmd(self, item))
+
+    # ==================================================================
+    # Drag & Drop (from ComponentPalette)
+    # ==================================================================
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat(MIME_TYPE):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasFormat(MIME_TYPE):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        if not event.mimeData().hasFormat(MIME_TYPE):
+            super().dropEvent(event)
+            return
+        if not self._spec:
+            self._spec = CircuitSpec(name="Manual Design")
+
+        raw = bytes(event.mimeData().data(MIME_TYPE)).decode("utf-8")
+        data = json.loads(raw)
+        drop_pos = self.mapToScene(event.pos())
+
+        # Build ComponentSpec from palette data
+        ref = self._next_ref(data.get("ref_prefix", "X"))
+        pins_data = data.get("pins", [])
+        pins = [PinSpec(number=p["number"], name=p.get("name", ""),
+                        electrical_type=p.get("electrical_type", "passive"))
+                for p in pins_data]
+        comp = ComponentSpec(
+            ref=ref,
+            value=data.get("value", ""),
+            category=ComponentCategory(data.get("category", "other")),
+            package=data.get("package", ""),
+            description=data.get("description", ""),
+            pins=pins,
+        )
+
+        self._undo_stack.push(_AddComponentCmd(self, comp, drop_pos))
+        event.acceptProposedAction()
+
+    # ==================================================================
+    # Component Editing
+    # ==================================================================
+
+    def _edit_component(self, item: ComponentItem):
+        """Show edit dialog for component ref/value."""
+        dlg = _CompEditDialog(item.comp, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_ref = dlg.ref_edit.text().strip()
+            new_val = dlg.val_edit.text().strip()
+            if new_ref and new_val and (new_ref != item.comp.ref or new_val != item.comp.value):
+                self._undo_stack.push(
+                    _EditComponentCmd(self, item,
+                                      item.comp.ref, item.comp.value,
+                                      new_ref, new_val)
+                )
+
+    # ==================================================================
+    # Wire Re-routing
+    # ==================================================================
+
+    def _schedule_reroute(self):
+        """Debounced reroute — called during drag."""
+        if not self._reroute_pending:
+            self._reroute_pending = True
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(50, self._do_reroute)
+
+    def _do_reroute(self):
+        self._reroute_pending = False
+        self._reroute_wires()
+
+    def _reroute_wires(self):
+        """Remove all wire/junction/label items and re-route."""
+        for item in list(self._scene.items()):
+            if not isinstance(item, ComponentItem):
+                self._scene.removeItem(item)
+        if self._spec:
+            _route_nets(self._spec, self._comp_items, self._scene)
+
+    def _push_move_cmd(self, item: ComponentItem, old_pos: QPointF, new_pos: QPointF):
+        """Push a move command onto the undo stack (called from ComponentItem)."""
+        self._undo_stack.push(_MoveComponentCmd(self, item, old_pos, new_pos))
+
+    # ==================================================================
+    # Helpers
+    # ==================================================================
+
+    def highlight_component(self, ref: str):
+        """Select and center on a specific component (used by AI Co-Pilot)."""
+        item = self._comp_items.get(ref)
+        if item:
+            self._scene.clearSelection()
+            item.setSelected(True)
+            self.centerOn(item)
+
+    def get_spec(self) -> CircuitSpec | None:
+        return self._spec
 
     def wheelEvent(self, event: QWheelEvent):
         f = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
