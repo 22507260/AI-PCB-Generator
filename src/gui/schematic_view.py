@@ -364,14 +364,14 @@ def _grid_layout(spec: CircuitSpec) -> dict[str, tuple[float, float]]:
 # Grid-based maze router (Lee algorithm with bend penalty)
 # =====================================================================
 
-_GRID_CELL = 10  # px per routing grid cell
+_GRID_CELL = 8  # px per routing grid cell (finer = more routing room)
 
 _BLOCKED = -1
 _FREE = 0
 # Cost weights
 _STRAIGHT_COST = 1
-_BEND_COST = 4       # discourage unnecessary bends
-_NEAR_WIRE_COST = 2  # discourage running next to existing wires
+_BEND_COST = 5        # discourage unnecessary bends
+_ADJACENT_COST = 3    # discourage routing next to obstacles/existing wires
 
 
 class _RoutingGrid:
@@ -400,15 +400,9 @@ class _RoutingGrid:
         return False
 
     def mark_wire(self, r: int, c: int):
-        """Mark cell as occupied by a routed wire (not blocked, but has cost)."""
+        """Mark cell as blocked by a routed wire — prevents future routes from crossing."""
         if 0 <= r < self.rows and 0 <= c < self.cols:
-            if self._cells[r][c] == _FREE:
-                self._cells[r][c] = 1  # wire present
-
-    def has_wire(self, r: int, c: int) -> bool:
-        if 0 <= r < self.rows and 0 <= c < self.cols:
-            return self._cells[r][c] > 0
-        return False
+            self._cells[r][c] = _BLOCKED
 
     def to_grid(self, x: float, y: float) -> tuple[int, int]:
         """Scene coords → (row, col)."""
@@ -478,9 +472,13 @@ def _lee_route(grid: _RoutingGrid, start: tuple[int, int],
             move_cost = _STRAIGHT_COST
             if prev_d >= 0 and cur_d != prev_d:
                 move_cost += _BEND_COST
-            # Penalize running next to existing wires
-            if grid.has_wire(nr, nc):
-                move_cost += _NEAR_WIRE_COST
+            # Penalize routing adjacent to any obstacle/wire (keeps spacing)
+            for dr2, dc2 in _DIRS:
+                ar, ac = nr + dr2, nc + dc2
+                if 0 <= ar < grid.rows and 0 <= ac < grid.cols:
+                    if not grid.is_free(ar, ac):
+                        move_cost += _ADJACENT_COST
+                        break
 
             new_cost = cost + move_cost
             key = (nr, nc, cur_d)
@@ -561,7 +559,7 @@ def _mst_edges(pts: list[QPointF]) -> list[tuple[int, int]]:
 def _build_routing_grid(comp_items: dict[str, 'ComponentItem'],
                         scene: QGraphicsScene) -> _RoutingGrid:
     """Create routing grid and mark component bodies as obstacles."""
-    rect = scene.itemsBoundingRect().adjusted(-80, -80, 80, 80)
+    rect = scene.itemsBoundingRect().adjusted(-150, -150, 150, 150)
     grid = _RoutingGrid(rect.left(), rect.top(), rect.right(), rect.bottom())
 
     for ref, item in comp_items.items():
@@ -662,13 +660,45 @@ def _route_nets(spec: CircuitSpec, comp_items: dict[str, 'ComponentItem'],
                 scene.addPath(wire_path, pen)
                 routed_any = True
             else:
-                # Fallback: simple L-route if maze fails
-                mx = (p1.x() + p2.x()) / 2
+                # Fallback: L-route via two candidate corners, pick the one
+                # that crosses fewer blocked cells.
+                corners = [
+                    QPointF(p2.x(), p1.y()),  # horizontal first
+                    QPointF(p1.x(), p2.y()),  # vertical first
+                ]
+                best_corner = corners[0]
+                best_cost = float('inf')
+                for cp in corners:
+                    cost = 0
+                    for seg in [(p1, cp), (cp, p2)]:
+                        sa, sb = seg
+                        sx0, sy0 = sa.x(), sa.y()
+                        sx1, sy1 = sb.x(), sb.y()
+                        steps = max(1, int(math.hypot(sx1 - sx0, sy1 - sy0) / _GRID_CELL))
+                        for s in range(steps + 1):
+                            t = s / steps
+                            gr = grid.to_grid(sx0 + (sx1 - sx0) * t,
+                                              sy0 + (sy1 - sy0) * t)
+                            if not grid.is_free(*gr):
+                                cost += 100
+                    if cost < best_cost:
+                        best_cost = cost
+                        best_corner = cp
                 fallback = QPainterPath(p1)
-                fallback.lineTo(QPointF(mx, p1.y()))
-                fallback.lineTo(QPointF(mx, p2.y()))
+                fallback.lineTo(best_corner)
                 fallback.lineTo(p2)
                 scene.addPath(fallback, pen)
+                # Mark fallback cells as blocked for future routes
+                for seg in [(p1, best_corner), (best_corner, p2)]:
+                    sa, sb = seg
+                    sx0, sy0 = sa.x(), sa.y()
+                    sx1, sy1 = sb.x(), sb.y()
+                    steps = max(1, int(math.hypot(sx1 - sx0, sy1 - sy0) / _GRID_CELL))
+                    for s in range(steps + 1):
+                        t = s / steps
+                        gr = grid.to_grid(sx0 + (sx1 - sx0) * t,
+                                          sy0 + (sy1 - sy0) * t)
+                        grid.mark_wire(*gr)
                 routed_any = True
 
         # Junction dots at each pin
