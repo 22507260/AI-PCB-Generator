@@ -241,6 +241,21 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "erc_no_decoupling": "{ref} IC'sinin dekuplaj kapasitörü yok",
         "erc_fix_add_cap": "100nF dekuplaj kapasitörü ekle",
         "erc_single_pin_net": "{net} net'ine yalnızca bir pin bağlı",
+
+        # ── Design Review / DFM ──
+        "tab_design_review": "🔍 Tasarım İnceleme",
+        "review_title": "🔍 AI Tasarım İnceleme & DFM Analizi",
+        "review_run": "🔬 Analiz Çalıştır",
+        "review_score_title": "DFM Üretilebilirlik Skoru",
+        "review_no_board": "Önce bir devre tasarlayın, ardından DFM analizi çalıştırın",
+        "review_col_issue": "Sorun",
+        "review_col_recommendation": "Öneri",
+        "review_grade_excellent": "Mükemmel",
+        "review_grade_good": "İyi",
+        "review_grade_fair": "Orta",
+        "review_grade_poor": "Zayıf",
+        "review_summary": "{grade} — {critical} kritik, {warnings} uyarı, {info} bilgi",
+        "review_all_pass": "✅ Tüm DFM kontrolleri geçti — tasarım üretime hazır!",
     },
 
     "en": {
@@ -479,6 +494,21 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "erc_no_decoupling": "IC {ref} has no decoupling capacitor",
         "erc_fix_add_cap": "Add 100nF decoupling capacitor",
         "erc_single_pin_net": "Net {net} has only one pin connected",
+
+        # ── Design Review / DFM ──
+        "tab_design_review": "🔍 Design Review",
+        "review_title": "🔍 AI Design Review & DFM Analysis",
+        "review_run": "🔬 Run Analysis",
+        "review_score_title": "DFM Manufacturability Score",
+        "review_no_board": "Design a circuit first, then run DFM analysis",
+        "review_col_issue": "Issue",
+        "review_col_recommendation": "Recommendation",
+        "review_grade_excellent": "Excellent",
+        "review_grade_good": "Good",
+        "review_grade_fair": "Fair",
+        "review_grade_poor": "Poor",
+        "review_summary": "{grade} — {critical} critical, {warnings} warning(s), {info} info",
+        "review_all_pass": "✅ All DFM checks passed — design is manufacturing-ready!",
     },
 }
 

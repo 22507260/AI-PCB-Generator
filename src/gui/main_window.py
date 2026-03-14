@@ -24,6 +24,7 @@ from src.gui.simulation_view import SimulationView
 from src.gui.component_panel import ComponentPanel
 from src.gui.component_palette import ComponentPalette
 from src.gui.ai_copilot import AICoPilotPanel
+from src.gui.design_review import DesignReviewPanel
 from src.gui.export_dialog import ExportDialog
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.i18n import tr, Translator
@@ -220,6 +221,12 @@ class MainWindow(QMainWindow):
         self._simulation_view = SimulationView()
         self._tab_widget.addTab(self._simulation_view, "")
 
+        self._design_review = DesignReviewPanel()
+        self._design_review.component_highlight.connect(
+            self._schematic_view.highlight_component
+        )
+        self._tab_widget.addTab(self._design_review, "")
+
         splitter.addWidget(self._tab_widget)
 
         splitter.setSizes([350, 850])
@@ -254,6 +261,9 @@ class MainWindow(QMainWindow):
         # Run ERC (AI Co-Pilot)
         self._copilot.run_erc(spec)
 
+        # Run DFM / Design Review
+        self._design_review.load_board(self._board)
+
         # Run DRC
         drc = DRCEngine(self._board)
         violations = drc.run_all()
@@ -286,6 +296,7 @@ class MainWindow(QMainWindow):
                 self._pcb_view.load_board(self._board)
                 self._view_3d.load_board(self._board)
                 self._simulation_view.load_circuit(spec)
+                self._design_review.load_board(self._board)
             except Exception as e:
                 log.warning("PCB regeneration failed: %s", e)
 
@@ -394,6 +405,8 @@ class MainWindow(QMainWindow):
         self._tab_widget.setTabText(1, tr("tab_pcb_layout"))
         self._tab_widget.setTabText(2, tr("tab_3d_view"))
         self._tab_widget.setTabText(3, tr("tab_simulation"))
+        self._tab_widget.setTabText(4, tr("tab_design_review"))
         self._copilot.retranslate()
+        self._design_review.retranslate()
         self._component_palette.retranslate()
         self._statusbar.showMessage(tr("status_ready"))
