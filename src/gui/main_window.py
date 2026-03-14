@@ -26,6 +26,7 @@ from src.gui.component_palette import ComponentPalette
 from src.gui.ai_copilot import AICoPilotPanel
 from src.gui.design_review import DesignReviewPanel
 from src.gui.export_dialog import ExportDialog
+from src.gui.manufacturing_dialog import ManufacturingDialog
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.i18n import tr, Translator
 from src.utils.file_io import save_project, load_project
@@ -84,6 +85,11 @@ class MainWindow(QMainWindow):
         self._act_export.setShortcut(QKeySequence("Ctrl+E"))
         self._act_export.triggered.connect(self._export)
         self._file_menu.addAction(self._act_export)
+
+        self._act_manufacture = QAction("", self)
+        self._act_manufacture.setShortcut(QKeySequence("Ctrl+M"))
+        self._act_manufacture.triggered.connect(self._manufacture)
+        self._file_menu.addAction(self._act_manufacture)
 
         self._file_menu.addSeparator()
 
@@ -150,6 +156,8 @@ class MainWindow(QMainWindow):
         self._toolbar.addSeparator()
         self._tb_export = self._toolbar.addAction("")
         self._tb_export.triggered.connect(self._export)
+        self._tb_manufacture = self._toolbar.addAction("")
+        self._tb_manufacture.triggered.connect(self._manufacture)
         self._toolbar.addSeparator()
         self._tb_settings = self._toolbar.addAction("")
         self._tb_settings.triggered.connect(self._open_settings)
@@ -361,6 +369,13 @@ class MainWindow(QMainWindow):
         dialog = ExportDialog(self._spec, self)
         dialog.exec()
 
+    def _manufacture(self):
+        if not self._spec:
+            QMessageBox.warning(self, tr("dialog_warning"), tr("warning_design_first"))
+            return
+        dialog = ManufacturingDialog(self._spec, self._board, self)
+        dialog.exec()
+
     def _open_settings(self):
         dialog = SettingsDialog(self)
         dialog.exec()
@@ -386,6 +401,7 @@ class MainWindow(QMainWindow):
         self._act_open.setText(tr("action_open_project"))
         self._act_save.setText(tr("action_save_project"))
         self._act_export.setText(tr("action_export"))
+        self._act_manufacture.setText(tr("action_manufacture"))
         self._act_exit.setText(tr("action_exit"))
         self._act_settings.setText(tr("action_settings"))
         self._act_zoom_in.setText(tr("action_zoom_in"))
@@ -399,6 +415,7 @@ class MainWindow(QMainWindow):
         self._tb_open.setText(tr("toolbar_open"))
         self._tb_save.setText(tr("toolbar_save"))
         self._tb_export.setText(tr("toolbar_export"))
+        self._tb_manufacture.setText(tr("toolbar_manufacture"))
         self._tb_settings.setText(tr("toolbar_settings"))
         self._tb_wire.setText(tr("toolbar_wire"))
         self._tab_widget.setTabText(0, tr("tab_schematic"))
