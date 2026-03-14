@@ -23,6 +23,7 @@ from PySide6.QtCore import QPointF, QRectF
 
 from src.pcb.generator import Board
 from src.gui.i18n import tr, Translator
+from src.gui.theme import tc, ThemeManager
 from src.models.model_registry import ModelRegistry
 from src.config import get_settings
 
@@ -179,6 +180,7 @@ class View3D(QWidget):
         self._setup_ui()
         self._retranslate()
         Translator.instance().language_changed.connect(self._retranslate)
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -188,23 +190,18 @@ class View3D(QWidget):
         # ── Control bar ──
         ctrl_frame = QFrame()
         ctrl_frame.setObjectName("view3d_controls")
-        ctrl_frame.setStyleSheet("""
-            #view3d_controls {
-                background: #111820;
-                border-bottom: 1px solid #1e2a3a;
-            }
-        """)
+        self._ctrl_frame = ctrl_frame
         ctrl_layout = QHBoxLayout(ctrl_frame)
         ctrl_layout.setContentsMargins(8, 4, 8, 4)
         ctrl_layout.setSpacing(10)
 
         self._lbl_title = QLabel()
-        self._lbl_title.setStyleSheet("color: #8b949e; font-weight: bold; font-size: 11px;")
+        self._lbl_title.setStyleSheet("font-weight: bold; font-size: 11px;")
         ctrl_layout.addWidget(self._lbl_title)
 
         self._cb_components = QCheckBox()
         self._cb_components.setChecked(True)
-        self._cb_components.setStyleSheet("color: #e0e0e0; font-size: 11px;")
+        self._cb_components.setStyleSheet("font-size: 11px;")
         self._cb_components.toggled.connect(self._on_toggle_components)
         ctrl_layout.addWidget(self._cb_components)
 
@@ -236,14 +233,7 @@ class View3D(QWidget):
 
         self._btn_reset = QPushButton()
         self._btn_reset.setFixedSize(70, 24)
-        self._btn_reset.setStyleSheet("""
-            QPushButton {
-                background: #21262d; color: #c9d1d9;
-                border: 1px solid #30363d; border-radius: 4px;
-                font-size: 11px;
-            }
-            QPushButton:hover { background: #30363d; }
-        """)
+        self._btn_reset.setStyleSheet("font-size: 11px;")
         self._btn_reset.clicked.connect(self._reset_view)
         ctrl_layout.addWidget(self._btn_reset)
 
@@ -252,6 +242,8 @@ class View3D(QWidget):
         # ── 3D canvas ──
         self._canvas = _Canvas3D(self)
         layout.addWidget(self._canvas, 1)
+
+        self._apply_theme()
 
     def load_board(self, board: Board):
         self._board = board
@@ -308,6 +300,26 @@ class View3D(QWidget):
         self._btn_reset.setText(tr("view3d_reset"))
         self._cb_wires.setText(tr("view3d_wires"))
         self._cb_3d_models.setText(tr("view3d_3d_models"))
+
+    def _apply_theme(self):
+        c = tc()
+        self._ctrl_frame.setStyleSheet(f"""
+            #view3d_controls {{
+                background: {c.bar_bg};
+                border-bottom: 1px solid {c.bar_border};
+            }}
+        """)
+        self._lbl_title.setStyleSheet(f"color: {c.header_text}; font-weight: bold; font-size: 11px;")
+        self._btn_reset.setStyleSheet(f"""
+            QPushButton {{
+                background: {c.bg_secondary}; color: {c.text};
+                border: 1px solid {c.border}; border-radius: 4px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background: {c.hover_bg}; }}
+        """)
+        self._canvas._dirty = True
+        self._canvas.update()
 
 
 class _Canvas3D(QWidget):
@@ -1272,10 +1284,10 @@ class _Canvas3D(QWidget):
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             grad = QLinearGradient(0, 0, 0, self.height())
-            grad.setColorAt(0, _BG_TOP)
-            grad.setColorAt(1, _BG_BOTTOM)
+            grad.setColorAt(0, QColor(tc().view3d_bg_top))
+            grad.setColorAt(1, QColor(tc().view3d_bg_bottom))
             painter.fillRect(self.rect(), grad)
-            painter.setPen(_DIM_TEXT)
+            painter.setPen(QColor(tc().text_dim))
             painter.setFont(QFont("Segoe UI", 14))
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, tr("view3d_no_board"))
             painter.end()
@@ -1302,9 +1314,9 @@ class _Canvas3D(QWidget):
 
         # ── Background gradient (3-stop for depth) ──
         grad = QLinearGradient(0, 0, 0, self.height())
-        grad.setColorAt(0, _BG_TOP)
-        grad.setColorAt(0.5, _BG_MID)
-        grad.setColorAt(1, _BG_BOTTOM)
+        grad.setColorAt(0, QColor(tc().view3d_bg_top))
+        grad.setColorAt(0.5, QColor(tc().view3d_bg_mid))
+        grad.setColorAt(1, QColor(tc().view3d_bg_bottom))
         painter.fillRect(self.rect(), grad)
 
         board = self._board

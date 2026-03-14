@@ -20,6 +20,7 @@ from PySide6.QtGui import (
 )
 
 from src.gui.i18n import tr
+from src.gui.theme import tc, ThemeManager
 
 from src.ai.schemas import (
     CircuitSpec, ComponentSpec, NetSpec, PinSpec, PinRef,
@@ -28,17 +29,20 @@ from src.ai.schemas import (
 from src.gui.component_palette import MIME_TYPE, _PIN_TEMPLATES
 
 # ── Palette ──
-_PAL = {
-    "bg":         QColor("#0d1117"),
-    "wire":       QColor("#3fb950"),
-    "wire_pwr":   QColor("#f0883e"),
-    "wire_gnd":   QColor("#58a6ff"),
-    "text":       QColor("#e6edf3"),
-    "text_dim":   QColor("#7a848e"),
-    "pin_dot":    QColor("#58a6ff"),
-    "selected":   QColor("#ffa657"),
-    "junction":   QColor("#3fb950"),
-}
+def _pal():
+    c = tc()
+    return {
+        "bg":         QColor(c.scene_bg),
+        "wire":       QColor("#3fb950"),
+        "wire_pwr":   QColor("#f0883e"),
+        "wire_gnd":   QColor("#58a6ff"),
+        "text":       QColor(c.scene_text),
+        "text_dim":   QColor(c.text_dim),
+        "pin_dot":    QColor("#58a6ff"),
+        "selected":   QColor("#ffa657"),
+        "junction":   QColor("#3fb950"),
+    }
+_PAL = _pal()
 
 _CAT_COLORS = {
     "resistor": QColor("#e6a23c"), "capacitor": QColor("#409eff"),
@@ -1050,9 +1054,18 @@ class SchematicView(QGraphicsView):
         self._reroute_pending = False
         self._ref_counter: dict[str, int] = {}  # ref_prefix → next number
 
+        # Theme
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
+
     @property
     def undo_stack(self) -> QUndoStack:
         return self._undo_stack
+
+    def _apply_theme(self):
+        global _PAL
+        _PAL = _pal()
+        self.setBackgroundBrush(QBrush(_PAL["bg"]))
+        self.viewport().update()
 
     # ==================================================================
     # Load circuit (from AI or file)

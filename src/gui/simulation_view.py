@@ -37,6 +37,7 @@ except ImportError:
     _HAS_PG = False
 
 from src.gui.i18n import tr, Translator
+from src.gui.theme import tc, ThemeManager
 from src.simulation.engine import NgSpiceEngine
 from src.simulation.netlist_writer import SpiceNetlistWriter
 from src.simulation.python_solver import PythonSolver
@@ -104,7 +105,9 @@ class SimulationView(QWidget):
 
         self._setup_ui()
         Translator.instance().language_changed.connect(self._retranslate)
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
         self._retranslate()
+        self._apply_theme()
 
     # ------------------------------------------------------------------ UI
 
@@ -246,12 +249,6 @@ class SimulationView(QWidget):
 
         # Run button
         self._btn_run = QPushButton()
-        self._btn_run.setStyleSheet(
-            "QPushButton { background-color: #238636; color: white; "
-            "font-weight: bold; padding: 8px; border-radius: 6px; }"
-            "QPushButton:hover { background-color: #2ea043; }"
-            "QPushButton:disabled { background-color: #21262d; color: #484f58; }"
-        )
         self._btn_run.clicked.connect(self._run_simulation)
         self._btn_run.setEnabled(False)
         lv.addWidget(self._btn_run)
@@ -259,7 +256,6 @@ class SimulationView(QWidget):
         # Status
         self._lbl_status = QLabel("")
         self._lbl_status.setWordWrap(True)
-        self._lbl_status.setStyleSheet("color: #8b949e; font-size: 11px;")
         lv.addWidget(self._lbl_status)
 
         # Signal selector
@@ -290,7 +286,7 @@ class SimulationView(QWidget):
         # Page 0: placeholder
         self._page_empty = QLabel()
         self._page_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._page_empty.setStyleSheet("color: #8b949e; font-size: 16px;")
+        self._page_empty.setStyleSheet("font-size: 16px;")
         self._result_stack.addWidget(self._page_empty)
 
         # Page 1: waveform plot
@@ -322,19 +318,11 @@ class SimulationView(QWidget):
         self._op_table.setColumnCount(2)
         self._op_table.setHorizontalHeaderLabels(["Node / Branch", "Value"])
         self._op_table.horizontalHeader().setStretchLastSection(True)
-        self._op_table.setStyleSheet(
-            "QTableWidget { background-color: #0d1117; color: #e6edf3; gridline-color: #21262d; }"
-            "QHeaderView::section { background-color: #161b22; color: #e6edf3; padding: 4px; }"
-        )
         self._result_stack.addWidget(self._op_table)
 
         # Page 3: netlist text
         self._netlist_view = QTextEdit()
         self._netlist_view.setReadOnly(True)
-        self._netlist_view.setStyleSheet(
-            "QTextEdit { background-color: #0d1117; color: #3fb950; "
-            "font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }"
-        )
         self._result_stack.addWidget(self._netlist_view)
 
         rv.addWidget(self._result_stack)
@@ -361,6 +349,33 @@ class SimulationView(QWidget):
         self._grp_signals.setTitle(tr("sim_signals"))
         self._page_empty.setText(tr("sim_no_circuit"))
         self._lbl_type.setText(tr("sim_analysis_type"))
+
+    def _apply_theme(self):
+        c = tc()
+        self._btn_run.setStyleSheet(
+            f"QPushButton {{ background-color: {c.button_green}; color: white; "
+            f"font-weight: bold; padding: 8px; border-radius: 6px; }}"
+            f"QPushButton:hover {{ background-color: {c.button_green_hover}; }}"
+            f"QPushButton:disabled {{ background-color: {c.bg_secondary}; color: {c.text_dim}; }}"
+        )
+        self._lbl_status.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        self._page_empty.setStyleSheet(f"color: {c.text_dim}; font-size: 16px;")
+        self._op_table.setStyleSheet(
+            f"QTableWidget {{ background-color: {c.bg}; color: {c.text}; gridline-color: {c.border_light}; }}"
+            f"QHeaderView::section {{ background-color: {c.bg_secondary}; color: {c.text}; padding: 4px; }}"
+        )
+        self._netlist_view.setStyleSheet(
+            f"QTextEdit {{ background-color: {c.bg}; color: {c.success}; "
+            f"font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; }}"
+        )
+        if _HAS_PG and self._plot_widget:
+            pg.setConfigOptions(background=c.bg, foreground=c.text)
+            self._plot_widget.setBackground(c.bg)
+            pi = self._plot_widget.plotItem
+            for axis_name in ("left", "bottom"):
+                ax = pi.getAxis(axis_name)
+                ax.setPen(c.text)
+                ax.setTextPen(c.text)
 
     # ------------------------------------------------------------------ API
 
@@ -407,7 +422,7 @@ class SimulationView(QWidget):
         # Disable run button
         self._btn_run.setEnabled(False)
         self._lbl_status.setText(tr("sim_running"))
-        self._lbl_status.setStyleSheet("color: #58a6ff; font-size: 11px;")
+        self._lbl_status.setStyleSheet(f"color: {tc().info}; font-size: 11px;")
 
         # Start worker
         self._worker = _SimWorker(netlist, config, self)
@@ -421,7 +436,7 @@ class SimulationView(QWidget):
 
         if not result.success:
             self._lbl_status.setText(tr("sim_error", error=result.error_message))
-            self._lbl_status.setStyleSheet("color: #f85149; font-size: 11px;")
+            self._lbl_status.setStyleSheet(f"color: {tc().error}; font-size: 11px;")
             return
 
         engine_msg = ""
@@ -429,7 +444,7 @@ class SimulationView(QWidget):
             engine_msg = f" ({tr('sim_no_ngspice')})"
 
         self._lbl_status.setText(tr("sim_complete") + engine_msg)
-        self._lbl_status.setStyleSheet("color: #3fb950; font-size: 11px;")
+        self._lbl_status.setStyleSheet(f"color: {tc().success}; font-size: 11px;")
 
         if result.analysis_type == "op" and result.operating_point:
             self._show_op_results(result)
@@ -519,8 +534,8 @@ class SimulationView(QWidget):
         # Add legend
         self._legend = self._plot_widget.addLegend(
             offset=(10, 10),
-            brush=pg.mkBrush("#161b2280"),
-            pen=pg.mkPen("#30363d"),
+            brush=pg.mkBrush(tc().bg_secondary + "80"),
+            pen=pg.mkPen(tc().border),
         )
 
         x_data = result.x_axis.values

@@ -1,4 +1,108 @@
-"""Dark theme stylesheet for the application."""
+"""Theme stylesheet & dynamic color provider for the application."""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QColor
+
+
+# =====================================================================
+# Dynamic color palette — used by widgets that can't rely on global QSS
+# (QGraphicsScene backgrounds, pyqtgraph, custom-painted widgets, etc.)
+# =====================================================================
+
+class _Colors:
+    """Named color set for one theme variant."""
+
+    __slots__ = (
+        "bg", "bg_secondary", "bg_input", "surface",
+        "text", "text_dim", "border", "border_light",
+        "accent", "accent_hover",
+        "success", "warning", "error", "info",
+        "scene_bg", "scene_grid", "scene_text",
+        "view3d_bg_top", "view3d_bg_mid", "view3d_bg_bottom", "view3d_grid",
+        "bar_bg", "bar_border",
+        "header_bg", "header_text",
+        "hover_bg", "selected_bg",
+        "button_green", "button_green_hover",
+    )
+
+    def __init__(self, **kw: str):
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+
+_DARK = _Colors(
+    bg="#0d1117",          bg_secondary="#161b22",   bg_input="#0d1117",
+    surface="#1a1a2e",     text="#e6edf3",           text_dim="#8b949e",
+    border="#30363d",      border_light="#21262d",
+    accent="#8957e5",      accent_hover="#a371f7",
+    success="#3fb950",     warning="#d29922",        error="#f85149",
+    info="#58a6ff",
+    scene_bg="#0d1117",    scene_grid="#1a2030",     scene_text="#e6edf3",
+    view3d_bg_top="#0C1218",  view3d_bg_mid="#101820",
+    view3d_bg_bottom="#0A1014", view3d_grid="#1a2530",
+    bar_bg="#111820",      bar_border="#1e2a3a",
+    header_bg="#161b22",   header_text="#8b949e",
+    hover_bg="#1c2333",    selected_bg="#1f6feb",
+    button_green="#238636", button_green_hover="#2ea043",
+)
+
+_LIGHT = _Colors(
+    bg="#ffffff",          bg_secondary="#f6f8fa",   bg_input="#ffffff",
+    surface="#f6f8fa",     text="#24292f",            text_dim="#57606a",
+    border="#d0d7de",      border_light="#eaeef2",
+    accent="#6d28d9",      accent_hover="#7c3aed",
+    success="#16a34a",     warning="#b45309",         error="#dc2626",
+    info="#2563eb",
+    scene_bg="#f8f9fb",    scene_grid="#e2e6ea",      scene_text="#24292f",
+    view3d_bg_top="#e8ecf0",  view3d_bg_mid="#dce0e5",
+    view3d_bg_bottom="#d0d5da", view3d_grid="#c4cad0",
+    bar_bg="#f0f2f5",      bar_border="#d0d7de",
+    header_bg="#eaeef2",   header_text="#57606a",
+    hover_bg="#e2e8f0",    selected_bg="#dbeafe",
+    button_green="#1a7f37", button_green_hover="#2da44e",
+)
+
+
+class ThemeManager(QObject):
+    """Singleton that tracks the active theme and emits on change."""
+
+    theme_changed = Signal()
+    _instance: ThemeManager | None = None
+
+    def __init__(self):
+        super().__init__()
+        self._dark = True
+
+    @classmethod
+    def instance(cls) -> ThemeManager:
+        if cls._instance is None:
+            cls._instance = ThemeManager()
+        return cls._instance
+
+    @property
+    def is_dark(self) -> bool:
+        return self._dark
+
+    def set_dark(self, dark: bool) -> None:
+        if dark != self._dark:
+            self._dark = dark
+            self.theme_changed.emit()
+
+    @property
+    def colors(self) -> _Colors:
+        return _DARK if self._dark else _LIGHT
+
+
+def tc() -> _Colors:
+    """Module-level shortcut — returns the active color set."""
+    return ThemeManager.instance().colors
+
+
+# =====================================================================
+# Global QSS stylesheets
+# =====================================================================
 
 DARK_THEME = """
 QMainWindow, QDialog {

@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt
 
 from src.config import get_settings, ROOT_DIR
 from src.gui.i18n import tr, Translator
-from src.gui.theme import DARK_THEME, LIGHT_THEME
+from src.gui.theme import DARK_THEME, LIGHT_THEME, ThemeManager
 from src.vendor import get_tool_status
 from src.utils.logger import get_logger
 
@@ -329,6 +329,7 @@ class SettingsDialog(QDialog):
                 app.setStyleSheet(DARK_THEME)
             else:
                 app.setStyleSheet(LIGHT_THEME)
+        ThemeManager.instance().set_dark(theme == "dark")
 
         # Apply language immediately
         Translator.instance().set_language(lang)

@@ -13,6 +13,7 @@ from PySide6.QtGui import QDrag, QColor, QFont, QPalette
 
 from src.pcb.components import ComponentDB
 from src.gui.i18n import tr
+from src.gui.theme import tc, ThemeManager
 
 
 # ── Default pin templates per category ──
@@ -102,6 +103,7 @@ class ComponentPalette(QWidget):
         super().__init__(parent)
         self._build_ui()
         self._load_components()
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -109,19 +111,14 @@ class ComponentPalette(QWidget):
         layout.setSpacing(4)
 
         # Title
-        title = QLabel(tr("palette_title"))
-        title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        title.setStyleSheet("color: #e6edf3;")
-        layout.addWidget(title)
+        self._title_lbl = QLabel(tr("palette_title"))
+        self._title_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        layout.addWidget(self._title_lbl)
 
         # Search bar
         self._search = QLineEdit()
         self._search.setPlaceholderText(tr("palette_search"))
         self._search.setClearButtonEnabled(True)
-        self._search.setStyleSheet(
-            "QLineEdit { background: #161b22; border: 1px solid #30363d; "
-            "border-radius: 4px; padding: 4px 8px; color: #e6edf3; }"
-        )
         self._search.textChanged.connect(self._filter)
         layout.addWidget(self._search)
 
@@ -132,15 +129,9 @@ class ComponentPalette(QWidget):
         self._tree.setDragDropMode(_DragTreeWidget.DragDropMode.DragOnly)
         self._tree.setRootIsDecorated(True)
         self._tree.setAnimated(True)
-        self._tree.setStyleSheet(
-            "QTreeWidget { background: #0d1117; border: 1px solid #30363d; "
-            "border-radius: 4px; color: #e6edf3; }"
-            "QTreeWidget::item { padding: 3px 4px; }"
-            "QTreeWidget::item:hover { background: #1c2333; }"
-            "QTreeWidget::item:selected { background: #1f6feb; }"
-            "QTreeWidget::branch { background: #0d1117; }"
-        )
         layout.addWidget(self._tree)
+
+        self._apply_theme()
 
     def _load_components(self):
         """Load components from DB into tree, grouped by category."""
@@ -199,5 +190,22 @@ class ComponentPalette(QWidget):
 
     def retranslate(self):
         """Update text for language changes."""
-        # Reload to pick up new translations
+        self._title_lbl.setText(tr("palette_title"))
+        self._search.setPlaceholderText(tr("palette_search"))
         self._load_components()
+
+    def _apply_theme(self):
+        c = tc()
+        self._title_lbl.setStyleSheet(f"color: {c.text};")
+        self._search.setStyleSheet(
+            f"QLineEdit {{ background: {c.bg_secondary}; border: 1px solid {c.border}; "
+            f"border-radius: 4px; padding: 4px 8px; color: {c.text}; }}"
+        )
+        self._tree.setStyleSheet(
+            f"QTreeWidget {{ background: {c.bg}; border: 1px solid {c.border}; "
+            f"border-radius: 4px; color: {c.text}; }}"
+            f"QTreeWidget::item {{ padding: 3px 4px; }}"
+            f"QTreeWidget::item:hover {{ background: {c.hover_bg}; }}"
+            f"QTreeWidget::item:selected {{ background: {c.selected_bg}; }}"
+            f"QTreeWidget::branch {{ background: {c.bg}; }}"
+        )

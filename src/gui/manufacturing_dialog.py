@@ -28,6 +28,7 @@ from src.pcb.manufacturing import (
     CostEstimate,
 )
 from src.gui.i18n import tr, Translator
+from src.gui.theme import tc, ThemeManager
 from src.utils.logger import get_logger
 
 log = get_logger("gui.manufacturing")
@@ -97,8 +98,10 @@ class ManufacturingDialog(QDialog):
         self.setMinimumSize(600, 560)
         self._setup_ui()
         self._retranslate()
+        self._apply_theme()
         self._update_cost()
         Translator.instance().language_changed.connect(self._retranslate)
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -107,11 +110,9 @@ class ManufacturingDialog(QDialog):
         # ── Title ──
         self._title = QLabel()
         self._title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._title.setStyleSheet("color: #e6edf3;")
         layout.addWidget(self._title)
 
         self._subtitle = QLabel()
-        self._subtitle.setStyleSheet("color: #8b949e; font-size: 11px;")
         self._subtitle.setWordWrap(True)
         layout.addWidget(self._subtitle)
 
@@ -145,63 +146,46 @@ class ManufacturingDialog(QDialog):
 
         # ── Cost Estimation Card ──
         self._cost_frame = QFrame()
-        self._cost_frame.setStyleSheet(
-            "QFrame { background: #161b22; border: 1px solid #30363d; "
-            "border-radius: 6px; }"
-        )
         cost_layout = QGridLayout(self._cost_frame)
         cost_layout.setContentsMargins(16, 12, 16, 12)
         cost_layout.setSpacing(8)
 
         self._cost_title = QLabel()
         self._cost_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self._cost_title.setStyleSheet("color: #e6edf3;")
         cost_layout.addWidget(self._cost_title, 0, 0, 1, 2)
 
         self._lbl_board_area = QLabel()
-        self._lbl_board_area.setStyleSheet("color: #8b949e; font-size: 11px;")
         cost_layout.addWidget(self._lbl_board_area, 1, 0)
         self._val_board_area = QLabel()
-        self._val_board_area.setStyleSheet("color: #e6edf3; font-size: 11px;")
         cost_layout.addWidget(self._val_board_area, 1, 1)
 
         self._lbl_pcb_cost = QLabel()
-        self._lbl_pcb_cost.setStyleSheet("color: #8b949e; font-size: 11px;")
         cost_layout.addWidget(self._lbl_pcb_cost, 2, 0)
         self._val_pcb_cost = QLabel()
-        self._val_pcb_cost.setStyleSheet("color: #e6edf3; font-size: 11px;")
         cost_layout.addWidget(self._val_pcb_cost, 2, 1)
 
         self._lbl_smt_cost = QLabel()
-        self._lbl_smt_cost.setStyleSheet("color: #8b949e; font-size: 11px;")
         cost_layout.addWidget(self._lbl_smt_cost, 3, 0)
         self._val_smt_cost = QLabel()
-        self._val_smt_cost.setStyleSheet("color: #e6edf3; font-size: 11px;")
         cost_layout.addWidget(self._val_smt_cost, 3, 1)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #30363d;")
-        cost_layout.addWidget(sep, 4, 0, 1, 2)
+        self._sep = QFrame()
+        self._sep.setFrameShape(QFrame.Shape.HLine)
+        cost_layout.addWidget(self._sep, 4, 0, 1, 2)
 
         self._lbl_total = QLabel()
         self._lbl_total.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self._lbl_total.setStyleSheet("color: #3fb950;")
         cost_layout.addWidget(self._lbl_total, 5, 0)
         self._val_total = QLabel()
         self._val_total.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self._val_total.setStyleSheet("color: #3fb950;")
         cost_layout.addWidget(self._val_total, 5, 1)
 
         self._lbl_lead_time = QLabel()
-        self._lbl_lead_time.setStyleSheet("color: #8b949e; font-size: 11px;")
         cost_layout.addWidget(self._lbl_lead_time, 6, 0)
         self._val_lead_time = QLabel()
-        self._val_lead_time.setStyleSheet("color: #e6edf3; font-size: 11px;")
         cost_layout.addWidget(self._val_lead_time, 6, 1)
 
         self._cost_notes = QLabel()
-        self._cost_notes.setStyleSheet("color: #d29922; font-size: 10px;")
         self._cost_notes.setWordWrap(True)
         cost_layout.addWidget(self._cost_notes, 7, 0, 1, 2)
 
@@ -234,7 +218,6 @@ class ManufacturingDialog(QDialog):
 
         # ── File list (after generation) ──
         self._files_label = QLabel("")
-        self._files_label.setStyleSheet("color: #8b949e; font-size: 11px;")
         self._files_label.setWordWrap(True)
         self._files_label.setVisible(False)
         layout.addWidget(self._files_label)
@@ -244,32 +227,16 @@ class ManufacturingDialog(QDialog):
         btn_layout.addStretch()
 
         self._btn_cancel = QPushButton()
-        self._btn_cancel.setStyleSheet(
-            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; "
-            "border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #30363d; }"
-        )
         self._btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(self._btn_cancel)
 
         self._btn_open_folder = QPushButton()
-        self._btn_open_folder.setStyleSheet(
-            "QPushButton { background: #21262d; color: #e6edf3; border: 1px solid #30363d; "
-            "border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #30363d; }"
-        )
         self._btn_open_folder.clicked.connect(self._open_output_folder)
         self._btn_open_folder.setVisible(False)
         btn_layout.addWidget(self._btn_open_folder)
 
         self._btn_generate = QPushButton()
         self._btn_generate.setMinimumWidth(200)
-        self._btn_generate.setStyleSheet(
-            "QPushButton { background: #238636; color: white; border: none; "
-            "border-radius: 4px; padding: 8px 20px; font-size: 12px; font-weight: bold; }"
-            "QPushButton:hover { background: #2ea043; }"
-            "QPushButton:disabled { background: #21262d; color: #484f58; }"
-        )
         self._btn_generate.clicked.connect(self._start_generation)
         btn_layout.addWidget(self._btn_generate)
 
@@ -346,7 +313,7 @@ class ManufacturingDialog(QDialog):
 
     def _on_progress(self, msg: str):
         self._status.setText(msg)
-        self._status.setStyleSheet("color: #8b949e;")
+        self._status.setStyleSheet(f"color: {tc().text_dim};")
 
     def _on_finished(self, files: dict[str, str]):
         self._progress.setVisible(False)
@@ -354,7 +321,7 @@ class ManufacturingDialog(QDialog):
 
         count = len(files)
         self._status.setText(tr("mfg_success", count=count))
-        self._status.setStyleSheet("color: #3fb950; font-weight: bold;")
+        self._status.setStyleSheet(f"color: {tc().success}; font-weight: bold;")
 
         # Show generated files
         lines = []
@@ -383,7 +350,7 @@ class ManufacturingDialog(QDialog):
         self._progress.setVisible(False)
         self._btn_generate.setEnabled(True)
         self._status.setText(tr("error_export", error=msg))
-        self._status.setStyleSheet("color: #f85149;")
+        self._status.setStyleSheet(f"color: {tc().error};")
         QMessageBox.critical(self, tr("dialog_error"), msg)
 
     def _open_output_folder(self):
@@ -412,3 +379,37 @@ class ManufacturingDialog(QDialog):
         self._btn_cancel.setText(tr("button_cancel"))
         self._btn_open_folder.setText(tr("mfg_open_folder"))
         self._btn_generate.setText(tr("mfg_generate"))
+
+    def _apply_theme(self):
+        c = tc()
+        self._title.setStyleSheet(f"color: {c.text};")
+        self._subtitle.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        self._cost_frame.setStyleSheet(
+            f"QFrame {{ background: {c.bg_secondary}; border: 1px solid {c.border}; "
+            f"border-radius: 6px; }}"
+        )
+        self._cost_title.setStyleSheet(f"color: {c.text};")
+        for lbl in (self._lbl_board_area, self._lbl_pcb_cost, self._lbl_smt_cost,
+                    self._lbl_lead_time):
+            lbl.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        for val in (self._val_board_area, self._val_pcb_cost, self._val_smt_cost,
+                    self._val_lead_time):
+            val.setStyleSheet(f"color: {c.text}; font-size: 11px;")
+        self._sep.setStyleSheet(f"color: {c.border};")
+        self._lbl_total.setStyleSheet(f"color: {c.success};")
+        self._val_total.setStyleSheet(f"color: {c.success};")
+        self._cost_notes.setStyleSheet(f"color: {c.warning}; font-size: 10px;")
+        self._files_label.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        _sec = (
+            f"QPushButton {{ background: {c.border_light}; color: {c.text}; "
+            f"border: 1px solid {c.border}; border-radius: 4px; padding: 6px 16px; }}"
+            f"QPushButton:hover {{ background: {c.border}; }}"
+        )
+        self._btn_cancel.setStyleSheet(_sec)
+        self._btn_open_folder.setStyleSheet(_sec)
+        self._btn_generate.setStyleSheet(
+            f"QPushButton {{ background: {c.button_green}; color: white; border: none; "
+            f"border-radius: 4px; padding: 8px 20px; font-size: 12px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {c.button_green_hover}; }}"
+            f"QPushButton:disabled {{ background: {c.border_light}; color: {c.text_dim}; }}"
+        )

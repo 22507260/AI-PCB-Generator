@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont, QColor
 from src.pcb.generator import Board
 from src.pcb.dfm import DFMEngine, DFMIssue, DFMCategory, DFMSeverity, compute_dfm_score
 from src.gui.i18n import tr
+from src.gui.theme import tc, ThemeManager
 
 
 # =====================================================================
@@ -49,6 +50,7 @@ class DesignReviewPanel(QWidget):
         self._board: Board | None = None
         self._issues: list[DFMIssue] = []
         self._build_ui()
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -59,26 +61,16 @@ class DesignReviewPanel(QWidget):
         header = QHBoxLayout()
         self._title = QLabel(tr("review_title"))
         self._title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self._title.setStyleSheet("color: #e6edf3;")
         header.addWidget(self._title)
         header.addStretch()
 
         self._btn_run = QPushButton(tr("review_run"))
-        self._btn_run.setStyleSheet(
-            "QPushButton { background: #8957e5; color: white; border: none; "
-            "border-radius: 4px; padding: 4px 14px; font-size: 11px; font-weight: bold; }"
-            "QPushButton:hover { background: #a371f7; }"
-        )
         self._btn_run.clicked.connect(self._on_run)
         header.addWidget(self._btn_run)
         layout.addLayout(header)
 
         # ── Score card ──
         self._score_frame = QFrame()
-        self._score_frame.setStyleSheet(
-            "QFrame { background: #161b22; border: 1px solid #30363d; "
-            "border-radius: 6px; padding: 8px; }"
-        )
         score_layout = QHBoxLayout(self._score_frame)
         score_layout.setContentsMargins(12, 8, 12, 8)
 
@@ -93,7 +85,6 @@ class DesignReviewPanel(QWidget):
         score_detail = QVBoxLayout()
         self._score_title = QLabel(tr("review_score_title"))
         self._score_title.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        self._score_title.setStyleSheet("color: #e6edf3;")
         score_detail.addWidget(self._score_title)
 
         self._score_bar = QProgressBar()
@@ -101,14 +92,9 @@ class DesignReviewPanel(QWidget):
         self._score_bar.setValue(0)
         self._score_bar.setTextVisible(False)
         self._score_bar.setFixedHeight(8)
-        self._score_bar.setStyleSheet(
-            "QProgressBar { background: #21262d; border: none; border-radius: 4px; }"
-            "QProgressBar::chunk { background: #3fb950; border-radius: 4px; }"
-        )
         score_detail.addWidget(self._score_bar)
 
         self._score_summary = QLabel("")
-        self._score_summary.setStyleSheet("color: #8b949e; font-size: 11px;")
         score_detail.addWidget(self._score_summary)
 
         score_layout.addLayout(score_detail, 1)
@@ -116,10 +102,6 @@ class DesignReviewPanel(QWidget):
 
         # ── Category summary ──
         self._cat_frame = QFrame()
-        self._cat_frame.setStyleSheet(
-            "QFrame { background: #0d1117; border: 1px solid #30363d; "
-            "border-radius: 4px; }"
-        )
         cat_layout = QHBoxLayout(self._cat_frame)
         cat_layout.setContentsMargins(8, 6, 8, 6)
         cat_layout.setSpacing(12)
@@ -128,7 +110,6 @@ class DesignReviewPanel(QWidget):
         for cat in DFMCategory:
             icon = _CAT_ICONS.get(cat, "")
             lbl = QLabel(f"{icon} 0")
-            lbl.setStyleSheet("color: #8b949e; font-size: 11px;")
             lbl.setToolTip(cat.value.replace("_", " ").title())
             cat_layout.addWidget(lbl)
             self._cat_labels[cat] = lbl
@@ -141,25 +122,15 @@ class DesignReviewPanel(QWidget):
         self._tree.setHeaderLabels([tr("review_col_issue"), tr("review_col_recommendation")])
         self._tree.setColumnWidth(0, 400)
         self._tree.setAlternatingRowColors(True)
-        self._tree.setStyleSheet(
-            "QTreeWidget { background: #0d1117; border: 1px solid #30363d; "
-            "border-radius: 4px; color: #e6edf3; font-size: 11px; "
-            "alternate-background-color: #161b22; }"
-            "QTreeWidget::item { padding: 4px 6px; }"
-            "QTreeWidget::item:hover { background: #1c2333; }"
-            "QTreeWidget::item:selected { background: #1f6feb; }"
-            "QHeaderView::section { background: #161b22; color: #8b949e; "
-            "border: 1px solid #30363d; padding: 4px; font-size: 11px; }"
-        )
         self._tree.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self._tree, 1)
 
         # ── No-board placeholder ──
         self._placeholder = QLabel(tr("review_no_board"))
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet("color: #484f58; font-size: 12px;")
         layout.addWidget(self._placeholder)
 
+        self._apply_theme()
         self._set_has_results(False)
 
     def _set_has_results(self, has: bool):
@@ -216,8 +187,9 @@ class DesignReviewPanel(QWidget):
             grade = tr("review_grade_poor")
 
         self._score_label.setStyleSheet(f"color: {color}; font-size: 28px; font-weight: bold;")
+        c = tc()
         self._score_bar.setStyleSheet(
-            f"QProgressBar {{ background: #21262d; border: none; border-radius: 4px; }}"
+            f"QProgressBar {{ background: {c.border_light}; border: none; border-radius: 4px; }}"
             f"QProgressBar::chunk {{ background: {color}; border-radius: 4px; }}"
         )
 
@@ -239,9 +211,9 @@ class DesignReviewPanel(QWidget):
             count = cat_counts[cat]
             lbl.setText(f"{icon} {count}")
             if count > 0:
-                lbl.setStyleSheet("color: #e6edf3; font-size: 11px; font-weight: bold;")
+                lbl.setStyleSheet(f"color: {tc().text}; font-size: 11px; font-weight: bold;")
             else:
-                lbl.setStyleSheet("color: #484f58; font-size: 11px;")
+                lbl.setStyleSheet(f"color: {tc().text_dim}; font-size: 11px;")
 
         # Issues tree
         self._tree.clear()
@@ -262,7 +234,7 @@ class DesignReviewPanel(QWidget):
                 f"{icon} {cat.value.replace('_', ' ').title()} ({len(cat_issues)})", ""
             ])
             cat_item.setFont(0, QFont("Segoe UI", 10, QFont.Weight.Bold))
-            cat_item.setForeground(0, QColor("#e6edf3"))
+            cat_item.setForeground(0, QColor(tc().text))
             self._tree.addTopLevelItem(cat_item)
 
             for issue in cat_issues:
@@ -271,7 +243,7 @@ class DesignReviewPanel(QWidget):
                 rec = issue.recommendation or ""
                 child = QTreeWidgetItem([text, f"💡 {rec}" if rec else ""])
                 child.setForeground(0, _SEV_COLORS.get(issue.severity, QColor("#e6edf3")))
-                child.setForeground(1, QColor("#8b949e"))
+                child.setForeground(1, QColor(tc().text_dim))
                 child.setData(0, Qt.ItemDataRole.UserRole, idx)
                 cat_item.addChild(child)
                 idx += 1
@@ -287,6 +259,42 @@ class DesignReviewPanel(QWidget):
             issue = self._issues[idx]
             if issue.refs:
                 self.component_highlight.emit(issue.refs[0])
+
+    def _apply_theme(self):
+        c = tc()
+        self._title.setStyleSheet(f"color: {c.text};")
+        self._btn_run.setStyleSheet(
+            f"QPushButton {{ background: {c.accent}; color: white; border: none; "
+            f"border-radius: 4px; padding: 4px 14px; font-size: 11px; font-weight: bold; }}"
+            f"QPushButton:hover {{ background: {c.accent_hover}; }}"
+        )
+        self._score_frame.setStyleSheet(
+            f"QFrame {{ background: {c.bg_secondary}; border: 1px solid {c.border}; "
+            f"border-radius: 6px; padding: 8px; }}"
+        )
+        self._score_title.setStyleSheet(f"color: {c.text};")
+        self._score_bar.setStyleSheet(
+            f"QProgressBar {{ background: {c.border_light}; border: none; border-radius: 4px; }}"
+            f"QProgressBar::chunk {{ background: {c.success}; border-radius: 4px; }}"
+        )
+        self._score_summary.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        self._cat_frame.setStyleSheet(
+            f"QFrame {{ background: {c.bg}; border: 1px solid {c.border}; "
+            f"border-radius: 4px; }}"
+        )
+        for lbl in self._cat_labels.values():
+            lbl.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        self._tree.setStyleSheet(
+            f"QTreeWidget {{ background: {c.bg}; border: 1px solid {c.border}; "
+            f"border-radius: 4px; color: {c.text}; font-size: 11px; "
+            f"alternate-background-color: {c.bg_secondary}; }}"
+            f"QTreeWidget::item {{ padding: 4px 6px; }}"
+            f"QTreeWidget::item:hover {{ background: {c.hover_bg}; }}"
+            f"QTreeWidget::item:selected {{ background: {c.selected_bg}; }}"
+            f"QHeaderView::section {{ background: {c.bg_secondary}; color: {c.text_dim}; "
+            f"border: 1px solid {c.border}; padding: 4px; font-size: 11px; }}"
+        )
+        self._placeholder.setStyleSheet(f"color: {c.text_dim}; font-size: 12px;")
 
     def retranslate(self):
         self._title.setText(tr("review_title"))

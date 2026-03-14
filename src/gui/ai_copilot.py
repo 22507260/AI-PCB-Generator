@@ -14,6 +14,7 @@ from PySide6.QtGui import QFont, QColor, QIcon
 
 from src.ai.schemas import CircuitSpec, ComponentSpec, NetSpec, PinRef
 from src.gui.i18n import tr
+from src.gui.theme import tc, ThemeManager
 
 
 # =====================================================================
@@ -266,6 +267,7 @@ class AICoPilotPanel(QWidget):
         super().__init__(parent)
         self._violations: list[ERCViolation] = []
         self._build_ui()
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -276,17 +278,11 @@ class AICoPilotPanel(QWidget):
         header = QHBoxLayout()
         self._title = QLabel(tr("copilot_title"))
         self._title.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        self._title.setStyleSheet("color: #e6edf3;")
         header.addWidget(self._title)
 
         header.addStretch()
 
         self._btn_run = QPushButton(tr("copilot_run_erc"))
-        self._btn_run.setStyleSheet(
-            "QPushButton { background: #238636; color: white; border: none; "
-            "border-radius: 4px; padding: 3px 10px; font-size: 11px; }"
-            "QPushButton:hover { background: #2ea043; }"
-        )
         self._btn_run.clicked.connect(self._on_run_clicked)
         header.addWidget(self._btn_run)
 
@@ -294,20 +290,14 @@ class AICoPilotPanel(QWidget):
 
         # Status bar
         self._status = QLabel("")
-        self._status.setStyleSheet("color: #8b949e; font-size: 11px;")
         layout.addWidget(self._status)
 
         # Violations tree
         self._tree = QTreeWidget()
         self._tree.setHeaderHidden(True)
         self._tree.setRootIsDecorated(False)
-        self._tree.setStyleSheet(
-            "QTreeWidget { background: #0d1117; border: 1px solid #30363d; "
-            "border-radius: 4px; color: #e6edf3; font-size: 11px; }"
-            "QTreeWidget::item { padding: 3px 4px; }"
-            "QTreeWidget::item:hover { background: #1c2333; }"
-            "QTreeWidget::item:selected { background: #1f6feb; }"
-        )
+
+        self._apply_theme()
         self._tree.itemClicked.connect(self._on_item_clicked)
         layout.addWidget(self._tree)
 
@@ -335,15 +325,16 @@ class AICoPilotPanel(QWidget):
         errors = sum(1 for v in self._violations if v.severity == Severity.ERROR)
         warnings = sum(1 for v in self._violations if v.severity == Severity.WARNING)
 
+        c = tc()
         if not self._violations:
             self._status.setText(tr("copilot_no_issues"))
-            self._status.setStyleSheet("color: #3fb950; font-size: 11px;")
+            self._status.setStyleSheet(f"color: {c.success}; font-size: 11px;")
             return
 
         self._status.setText(
             tr("copilot_issues_found", errors=errors, warnings=warnings)
         )
-        self._status.setStyleSheet("color: #d29922; font-size: 11px;")
+        self._status.setStyleSheet(f"color: {c.warning}; font-size: 11px;")
 
         for i, v in enumerate(self._violations):
             icon = _SEV_ICONS.get(v.severity, "")
@@ -354,6 +345,23 @@ class AICoPilotPanel(QWidget):
             item.setForeground(0, _SEV_COLORS.get(v.severity, QColor("#e6edf3")))
             item.setData(0, Qt.ItemDataRole.UserRole, i)
             self._tree.addTopLevelItem(item)
+
+    def _apply_theme(self):
+        c = tc()
+        self._title.setStyleSheet(f"color: {c.text};")
+        self._btn_run.setStyleSheet(
+            f"QPushButton {{ background: {c.button_green}; color: white; border: none; "
+            f"border-radius: 4px; padding: 3px 10px; font-size: 11px; }}"
+            f"QPushButton:hover {{ background: {c.button_green_hover}; }}"
+        )
+        self._status.setStyleSheet(f"color: {c.text_dim}; font-size: 11px;")
+        self._tree.setStyleSheet(
+            f"QTreeWidget {{ background: {c.bg}; border: 1px solid {c.border}; "
+            f"border-radius: 4px; color: {c.text}; font-size: 11px; }}"
+            f"QTreeWidget::item {{ padding: 3px 4px; }}"
+            f"QTreeWidget::item:hover {{ background: {c.hover_bg}; }}"
+            f"QTreeWidget::item:selected {{ background: {c.selected_bg}; }}"
+        )
 
     def retranslate(self):
         self._title.setText(tr("copilot_title"))

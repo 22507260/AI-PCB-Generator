@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
 from src.gui.main_window import MainWindow
-from src.gui.theme import DARK_THEME, LIGHT_THEME
+from src.gui.theme import DARK_THEME, LIGHT_THEME, ThemeManager
 from src.gui.i18n import Translator
 from src.config import get_settings
 from src.utils.logger import setup_logging
@@ -27,6 +27,7 @@ def main():
     # Apply saved settings
     settings = get_settings()
     Translator.instance().set_language(settings.language)
+    ThemeManager.instance().set_dark(settings.theme == "dark")
 
     if settings.theme == "dark":
         app.setStyleSheet(DARK_THEME)

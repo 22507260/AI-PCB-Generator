@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread
 
 from src.gui.i18n import tr, Translator
+from src.gui.theme import tc
 
 
 class AIWorker(QThread):
@@ -134,12 +135,12 @@ class InputPanel(QWidget):
         if not description:
             self._status_label.setText(tr("warning_enter_desc"))
             self._status_label.setObjectName("warningLabel")
-            self._status_label.setStyleSheet("color: #d29922;")
+            self._status_label.setStyleSheet(f"color: {tc().warning};")
             return
 
         self._set_busy(True)
         self._status_label.setText(tr("status_starting_ai"))
-        self._status_label.setStyleSheet("color: #8b949e;")
+        self._status_label.setStyleSheet(f"color: {tc().text_dim};")
 
         self._worker = AIWorker(description)
         self._worker.finished.connect(self._on_finished)
@@ -154,21 +155,21 @@ class InputPanel(QWidget):
                components=spec.component_count, nets=spec.net_count)
         )
         if spec.net_count == 0:
-            self._status_label.setStyleSheet("color: #d29922;")
+            self._status_label.setStyleSheet(f"color: {tc().warning};")
             QMessageBox.warning(
                 self,
                 tr("dialog_warning"),
                 tr("warning_zero_nets", name=spec.name, count=spec.component_count),
             )
         else:
-            self._status_label.setStyleSheet("color: #3fb950;")
+            self._status_label.setStyleSheet(f"color: {tc().success};")
         self.circuit_generated.emit(spec)
         self.status_message.emit(tr("status_circuit_created", name=spec.name))
 
     def _on_error(self, msg: str):
         self._set_busy(False)
         self._status_label.setText(tr("error_circuit", error=msg))
-        self._status_label.setStyleSheet("color: #f85149;")
+        self._status_label.setStyleSheet(f"color: {tc().error};")
         self.status_message.emit(tr("error_circuit", error=msg))
 
     def _on_progress(self, msg: str):

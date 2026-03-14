@@ -17,6 +17,7 @@ from PySide6.QtGui import (
 
 from src.pcb.generator import Board
 from src.gui.i18n import tr, Translator
+from src.gui.theme import tc, ThemeManager
 
 # ── KiCad-style layer colors ──
 _LAYER_COLORS = {
@@ -38,12 +39,12 @@ _BOARD_FILL     = QColor("#0d0d0d")
 _BOARD_EDGE     = QColor("#e5e500")
 _VIA_RING       = QColor("#c8c832")
 _VIA_DRILL      = QColor("#0a0a0a")
-_PAD_THT        = QColor("#c040c0")   # magenta annular ring
+_PAD_THT        = QColor("#c040c0")
 _PAD_SMD_FCU    = QColor("#ff3333")
 _PAD_SMD_BCU    = QColor("#4169e1")
 _TEXT_COLOR      = QColor("#e0e0e0")
 _TEXT_DIM        = QColor("#5a6a7a")
-_SILK_COLOR      = QColor("#00e5ff")  # cyan
+_SILK_COLOR      = QColor("#00e5ff")
 _GRID_COLOR      = QColor("#111111")
 _GRID_MAJOR      = QColor("#1a1a1a")
 _ORIGIN_COLOR    = QColor("#2a3a4a")
@@ -184,6 +185,7 @@ class PCBView(QWidget):
         self._setup_ui()
         self._retranslate()
         Translator.instance().language_changed.connect(self._retranslate)
+        ThemeManager.instance().theme_changed.connect(self._apply_theme)
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -193,19 +195,13 @@ class PCBView(QWidget):
         # ── Layer control bar ──
         layer_frame = QFrame()
         layer_frame.setObjectName("pcb_layer_bar")
-        layer_frame.setStyleSheet("""
-            #pcb_layer_bar {
-                background: #111820;
-                border-bottom: 1px solid #1e2a3a;
-                padding: 4px 8px;
-            }
-        """)
+        self._layer_frame = layer_frame
         layer_bar = QHBoxLayout(layer_frame)
         layer_bar.setContentsMargins(8, 4, 8, 4)
         layer_bar.setSpacing(12)
 
         self._layers_label = QLabel()
-        self._layers_label.setStyleSheet("color: #8b949e; font-weight: bold; font-size: 11px;")
+        self._layers_label.setStyleSheet("font-weight: bold; font-size: 11px;")
         layer_bar.addWidget(self._layers_label)
 
         self._layer_checks: dict[str, QCheckBox] = {}
@@ -239,6 +235,8 @@ class PCBView(QWidget):
         self._view = _PCBGraphicsView()
         layout.addWidget(self._view, 1)
 
+        self._apply_theme()
+
     def load_board(self, board: Board):
         self._board = board
         self._view.render_board(board, self._visible_layers)
@@ -253,6 +251,19 @@ class PCBView(QWidget):
 
     def _retranslate(self):
         self._layers_label.setText(tr("label_layers"))
+
+    def _apply_theme(self):
+        c = tc()
+        self._layer_frame.setStyleSheet(f"""
+            #pcb_layer_bar {{
+                background: {c.bar_bg};
+                border-bottom: 1px solid {c.bar_border};
+                padding: 4px 8px;
+            }}
+        """)
+        self._layers_label.setStyleSheet(f"color: {c.header_text}; font-weight: bold; font-size: 11px;")
+        self._view.setBackgroundBrush(QBrush(QColor(c.scene_bg)))
+        self._view.viewport().update()
 
 
 class _PCBGraphicsView(QGraphicsView):
