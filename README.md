@@ -22,6 +22,8 @@
 ![NgSpice](https://img.shields.io/badge/SPICE-NgSpice%2045-orange)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/otis21)
+
 </p>
 
 ---
@@ -373,5 +375,8 @@ MIT License — see the [LICENSE](LICENSE) file for details.
 
 <p align="center">
   <strong>Built with ❤️ using Python, PySide6/Qt6, and AI</strong><br/>
-  <sub>Star ⭐ this repo if you find it useful!</sub>
+  <sub>Star ⭐ this repo if you find it useful!</sub><br/><br/>
+  <a href="https://buymeacoffee.com/otis21">
+    <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=☕&slug=otis21&button_colour=FFDD00&font_colour=000000&font_family=Poppins&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me A Coffee" />
+  </a>
 </p>
