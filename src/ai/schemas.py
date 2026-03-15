@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +127,13 @@ class PinRef(BaseModel):
     """Reference to a specific pin on a component."""
     ref: str = Field(..., description="Component reference (e.g. 'R1')")
     pin: str = Field(..., description="Pin number/name (e.g. '1', 'VIN')")
+
+    @field_validator("pin", mode="before")
+    @classmethod
+    def _coerce_pin(cls, v):
+        if v is None:
+            return "1"
+        return str(v)
 
 
 class NetSpec(BaseModel):
