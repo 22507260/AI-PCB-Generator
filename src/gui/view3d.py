@@ -31,6 +31,30 @@ from src.config import get_settings
 _BOARD_TOP = QColor("#1B6B3F")
 _BOARD_SIDE = QColor("#0E4226")
 _BOARD_BOTTOM = QColor("#13502D")
+
+# ── PCB solder mask color palettes ──
+# Each tuple: (top, side, bottom, mask, mask_dark, border)
+_PCB_STYLES = {
+    "green": (QColor("#1B6B3F"), QColor("#0E4226"), QColor("#13502D"),
+              QColor(18, 90, 45, 170), QColor(12, 65, 30, 200), QColor("#1a6a3a")),
+    "blue": (QColor("#1A3B6B"), QColor("#0E2242"), QColor("#13305A"),
+             QColor(18, 45, 90, 170), QColor(12, 30, 65, 200), QColor("#1a3a6a")),
+    "red": (QColor("#6B1A1A"), QColor("#420E0E"), QColor("#501313"),
+            QColor(90, 18, 18, 170), QColor(65, 12, 12, 200), QColor("#6a1a1a")),
+    "black": (QColor("#1A1A1A"), QColor("#0E0E0E"), QColor("#131313"),
+              QColor(20, 20, 20, 170), QColor(15, 15, 15, 200), QColor("#222222")),
+    "white": (QColor("#E8E8E0"), QColor("#C8C8C0"), QColor("#D8D8D0"),
+              QColor(220, 220, 210, 170), QColor(200, 200, 190, 200), QColor("#d0d0c8")),
+    "purple": (QColor("#3B1A6B"), QColor("#220E42"), QColor("#2D1350"),
+               QColor(50, 18, 90, 170), QColor(35, 12, 65, 200), QColor("#3a1a6a")),
+    "yellow": (QColor("#6B6B1A"), QColor("#42420E"), QColor("#505013"),
+               QColor(90, 90, 18, 170), QColor(65, 65, 12, 200), QColor("#6a6a1a")),
+}
+_PCB_STYLE_KEYS = list(_PCB_STYLES.keys())
+
+# ── FR4 substrate (fiberglass) colors for board edges ──
+_FR4_COLOR = QColor("#C8B860")
+_FR4_DARK = QColor("#A89840")
 _COPPER_F = QColor("#D4883A")
 _COPPER_B = QColor("#8b5e3c")
 _SOLDER_MASK = QColor(18, 90, 45, 170)
@@ -385,6 +409,34 @@ class _Canvas3D(QWidget):
     def set_board(self, board: Board):
         self._board = board
         self._dirty = True
+
+    def _determine_board_style(self, board: Board) -> dict:
+        """Pick PCB solder mask color and features based on components."""
+        # Deterministic style from component hash
+        sig = "".join(sorted(c.ref + (c.value or "") for c in board.components))
+        style_idx = hash(sig) % len(_PCB_STYLE_KEYS)
+        style_key = _PCB_STYLE_KEYS[style_idx]
+        top, side, bottom, mask, mask_dark, border = _PCB_STYLES[style_key]
+
+        n_comps = len(board.components)
+        bw = board.outline.width_mm
+        bh = board.outline.height_mm
+
+        # Mounting holes: add if board is large enough
+        add_holes = bw >= 20 and bh >= 20
+        hole_inset = 3.0
+        corner_r = min(bw, bh) * 0.04  # Rounded corners proportional to board
+
+        # Copper ground pour: more copper fill for complex boards
+        show_copper_pour = n_comps >= 4
+
+        return {
+            "top": top, "side": side, "bottom": bottom,
+            "mask": mask, "mask_dark": mask_dark, "border": border,
+            "mounting_holes": add_holes, "hole_inset": hole_inset,
+            "corner_r": corner_r, "copper_pour": show_copper_pour,
+            "style": style_key,
+        }
 
     def _project(self, x: float, y: float, z: float) -> QPointF:
         p = _iso_project(x, y, z, self._rot_x, self._rot_z)
@@ -1667,6 +1719,11 @@ class _Canvas3D(QWidget):
         def p3(x, y, z):
             return self._project(x + cx_off, y + cy_off, z)
 
+        # ── Determine board style from circuit ──
+        bs = self._determine_board_style(board)
+        b_top, b_side, b_bottom = bs["top"], bs["side"], bs["bottom"]
+        b_mask, b_border = bs["mask"], bs["border"]
+
         # ── Board shadow ──
         shadow_z = -board_thickness - 2
         s_pts = [p3(bx + 3, by + 3, shadow_z), p3(bx + bw + 3, by + 3, shadow_z),
@@ -1677,32 +1734,110 @@ class _Canvas3D(QWidget):
         z_bot = -board_thickness
         bot_pts = [p3(bx, by, z_bot), p3(bx + bw, by, z_bot),
                    p3(bx + bw, by + bh, z_bot), p3(bx, by + bh, z_bot)]
-        self._draw_quad(painter, bot_pts, _BOARD_BOTTOM, QColor("#0a2a15"))
+        self._draw_quad(painter, bot_pts, b_bottom, b_border)
 
-        # ── Board sides ──
-        front = [p3(bx, by + bh, z_bot), p3(bx + bw, by + bh, z_bot),
-                 p3(bx + bw, by + bh, 0), p3(bx, by + bh, 0)]
-        self._draw_quad(painter, front, _BOARD_SIDE, QColor("#0a2a15"))
+        # ── Board sides (FR4 fiberglass substrate visible) ──
+        # Inner FR4 layer (yellowish fiberglass) + thin top/bottom solder mask strips
+        fr4_z_top = -0.15
+        fr4_z_bot = -(board_thickness - 0.15)
 
-        right = [p3(bx + bw, by, z_bot), p3(bx + bw, by + bh, z_bot),
-                 p3(bx + bw, by + bh, 0), p3(bx + bw, by, 0)]
-        self._draw_quad(painter, right, _BOARD_SIDE.lighter(110), QColor("#0a2a15"))
+        # Front side
+        front_top_mask = [p3(bx, by + bh, fr4_z_top), p3(bx + bw, by + bh, fr4_z_top),
+                          p3(bx + bw, by + bh, 0), p3(bx, by + bh, 0)]
+        self._draw_quad(painter, front_top_mask, b_side, b_border)
+        front_fr4 = [p3(bx, by + bh, fr4_z_bot), p3(bx + bw, by + bh, fr4_z_bot),
+                     p3(bx + bw, by + bh, fr4_z_top), p3(bx, by + bh, fr4_z_top)]
+        self._draw_quad(painter, front_fr4, _FR4_COLOR, _FR4_DARK)
+        front_bot_mask = [p3(bx, by + bh, z_bot), p3(bx + bw, by + bh, z_bot),
+                          p3(bx + bw, by + bh, fr4_z_bot), p3(bx, by + bh, fr4_z_bot)]
+        self._draw_quad(painter, front_bot_mask, b_side.darker(110), b_border)
 
-        left = [p3(bx, by, z_bot), p3(bx, by + bh, z_bot),
-                p3(bx, by + bh, 0), p3(bx, by, 0)]
-        self._draw_quad(painter, left, _BOARD_SIDE.darker(110), QColor("#0a2a15"))
+        # Right side
+        right_top_mask = [p3(bx + bw, by, fr4_z_top), p3(bx + bw, by + bh, fr4_z_top),
+                          p3(bx + bw, by + bh, 0), p3(bx + bw, by, 0)]
+        self._draw_quad(painter, right_top_mask, b_side.lighter(110), b_border)
+        right_fr4 = [p3(bx + bw, by, fr4_z_bot), p3(bx + bw, by + bh, fr4_z_bot),
+                     p3(bx + bw, by + bh, fr4_z_top), p3(bx + bw, by, fr4_z_top)]
+        self._draw_quad(painter, right_fr4, _FR4_COLOR.lighter(110), _FR4_DARK)
+        right_bot_mask = [p3(bx + bw, by, z_bot), p3(bx + bw, by + bh, z_bot),
+                          p3(bx + bw, by + bh, fr4_z_bot), p3(bx + bw, by, fr4_z_bot)]
+        self._draw_quad(painter, right_bot_mask, b_side, b_border)
 
-        back = [p3(bx, by, z_bot), p3(bx + bw, by, z_bot),
-                p3(bx + bw, by, 0), p3(bx, by, 0)]
-        self._draw_quad(painter, back, _BOARD_SIDE.darker(120), QColor("#0a2a15"))
+        # Left side
+        left_top_mask = [p3(bx, by, fr4_z_top), p3(bx, by + bh, fr4_z_top),
+                         p3(bx, by + bh, 0), p3(bx, by, 0)]
+        self._draw_quad(painter, left_top_mask, b_side.darker(110), b_border)
+        left_fr4 = [p3(bx, by, fr4_z_bot), p3(bx, by + bh, fr4_z_bot),
+                    p3(bx, by + bh, fr4_z_top), p3(bx, by, fr4_z_top)]
+        self._draw_quad(painter, left_fr4, _FR4_DARK, _FR4_DARK.darker(110))
+        left_bot_mask = [p3(bx, by, z_bot), p3(bx, by + bh, z_bot),
+                         p3(bx, by + bh, fr4_z_bot), p3(bx, by, fr4_z_bot)]
+        self._draw_quad(painter, left_bot_mask, b_side.darker(120), b_border)
+
+        # Back side
+        back_top_mask = [p3(bx, by, fr4_z_top), p3(bx + bw, by, fr4_z_top),
+                         p3(bx + bw, by, 0), p3(bx, by, 0)]
+        self._draw_quad(painter, back_top_mask, b_side.darker(120), b_border)
+        back_fr4 = [p3(bx, by, fr4_z_bot), p3(bx + bw, by, fr4_z_bot),
+                    p3(bx + bw, by, fr4_z_top), p3(bx, by, fr4_z_top)]
+        self._draw_quad(painter, back_fr4, _FR4_DARK.darker(110), _FR4_DARK.darker(120))
+        back_bot_mask = [p3(bx, by, z_bot), p3(bx + bw, by, z_bot),
+                         p3(bx + bw, by, fr4_z_bot), p3(bx, by, fr4_z_bot)]
+        self._draw_quad(painter, back_bot_mask, b_side.darker(130), b_border)
 
         # ── Board top (solder mask with texture gradient) ──
         top_pts = [p3(bx, by, 0), p3(bx + bw, by, 0),
                    p3(bx + bw, by + bh, 0), p3(bx, by + bh, 0)]
         self._draw_quad_gradient(painter, top_pts,
-                                 _BOARD_TOP, _BOARD_TOP.darker(108),
-                                 QColor("#1a6a3a"))
-        self._draw_quad(painter, top_pts, _SOLDER_MASK)
+                                 b_top, b_top.darker(108), b_border)
+        self._draw_quad(painter, top_pts, b_mask)
+
+        # ── Copper ground pour (hatched fill on exposed areas) ──
+        if bs["copper_pour"]:
+            painter.setPen(Qt.PenStyle.NoPen)
+            pour_color = QColor(_COPPER_F.red(), _COPPER_F.green(),
+                                _COPPER_F.blue(), 18)
+            self._draw_quad(painter, top_pts, pour_color)
+
+        # ── Corner chamfers (small triangles at board corners) ──
+        cr = bs["corner_r"]
+        if cr > 0.3:
+            chamfer_color = _FR4_COLOR
+            chamfer_color.setAlpha(120)
+            # Draw small triangular chamfers at each corner
+            for (corner_x, corner_y, dx_sign, dy_sign) in [
+                (bx, by, 1, 1), (bx + bw, by, -1, 1),
+                (bx + bw, by + bh, -1, -1), (bx, by + bh, 1, -1)
+            ]:
+                tri = [p3(corner_x, corner_y, 0.01),
+                       p3(corner_x + cr * dx_sign, corner_y, 0.01),
+                       p3(corner_x, corner_y + cr * dy_sign, 0.01)]
+                self._draw_quad(painter, tri, chamfer_color)
+
+        # ── Mounting holes ──
+        if bs["mounting_holes"]:
+            hole_r = 1.6  # M3 mounting hole
+            inset = bs["hole_inset"]
+            hole_positions = [
+                (bx + inset, by + inset),
+                (bx + bw - inset, by + inset),
+                (bx + bw - inset, by + bh - inset),
+                (bx + inset, by + bh - inset),
+            ]
+            for hx, hy in hole_positions:
+                hp = p3(hx, hy, 0.08)
+                hr = hole_r * self._zoom
+                # Annular copper ring
+                painter.setPen(Qt.PenStyle.NoPen)
+                ring_grad = QRadialGradient(hp, hr * 1.3)
+                ring_grad.setColorAt(0, _PAD_ANNULAR)
+                ring_grad.setColorAt(0.7, _PAD_ANNULAR.darker(130))
+                ring_grad.setColorAt(1, Qt.GlobalColor.transparent)
+                painter.setBrush(QBrush(ring_grad))
+                painter.drawEllipse(hp, hr * 1.3, hr * 1.3)
+                # Drill hole
+                painter.setBrush(QBrush(_DRILL_COLOR))
+                painter.drawEllipse(hp, hr * 0.7, hr * 0.7)
 
         # Solder mask openings around pads (exposed copper annular rings)
         for comp in board.components:
@@ -1958,7 +2093,7 @@ class _Canvas3D(QWidget):
                     painter.drawEllipse(end_pt, dr, dr)
 
         # ── Info overlay with semi-transparent background ──
-        info = f"{bw:.1f} x {bh:.1f} mm  |  {len(board.components)} comp  |  {len(board.traces)} traces"
+        info = f"{bw:.1f} x {bh:.1f} mm  |  {len(board.components)} comp  |  {len(board.traces)} traces  |  {bs['style']} PCB"
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(0, 0, 0, 100)))
         painter.drawRoundedRect(QRectF(6, self.height() - 28, len(info) * 7 + 16, 22), 4, 4)
@@ -2004,12 +2139,14 @@ class _Canvas3D(QWidget):
         dy = pos.y() - self._last_mouse.y()
 
         if event.buttons() & Qt.MouseButton.LeftButton:
-            self._rot_z += dx * 0.5
-            self._rot_x = max(5, min(85, self._rot_x + dy * 0.3))
+            self._rot_z -= dx * 0.5
+            self._rot_x = max(-15, min(90, self._rot_x - dy * 0.3))
         elif event.buttons() & Qt.MouseButton.RightButton:
             self._pan += QPointF(dx, dy)
         elif event.buttons() & Qt.MouseButton.MiddleButton:
-            self._pan += QPointF(dx, dy)
+            # Middle mouse = zoom drag (up = zoom in, down = zoom out)
+            zoom_delta = -dy * 0.02
+            self._zoom = max(0.2, min(50.0, self._zoom * (1 + zoom_delta)))
 
         self._last_mouse = pos
         self._schedule_repaint()
@@ -2019,6 +2156,6 @@ class _Canvas3D(QWidget):
 
     def wheelEvent(self, event: QWheelEvent):
         delta = event.angleDelta().y()
-        factor = 1.1 if delta > 0 else 1 / 1.1
-        self._zoom = max(0.5, min(20.0, self._zoom * factor))
+        factor = 1.15 if delta > 0 else 1 / 1.15
+        self._zoom = max(0.2, min(50.0, self._zoom * factor))
         self._schedule_repaint()
