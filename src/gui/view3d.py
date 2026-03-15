@@ -11,7 +11,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
-    QFrame, QCheckBox, QPushButton,
+    QFrame, QCheckBox, QPushButton, QComboBox,
 )
 from PySide6.QtCore import Qt, QPoint, QTimer
 from PySide6.QtGui import (
@@ -291,6 +291,25 @@ class View3D(QWidget):
 
         ctrl_layout.addStretch()
 
+        # ── PCB color picker ──
+        self._lbl_pcb_color = QLabel()
+        self._lbl_pcb_color.setStyleSheet("font-size: 11px;")
+        ctrl_layout.addWidget(self._lbl_pcb_color)
+
+        self._cmb_pcb_color = QComboBox()
+        self._cmb_pcb_color.setFixedHeight(24)
+        self._cmb_pcb_color.setStyleSheet("font-size: 11px; min-width: 80px;")
+        self._cmb_pcb_color.addItem("Auto", "auto")
+        _color_labels = {
+            "green": "🟢 Green", "blue": "🔵 Blue", "red": "🔴 Red",
+            "black": "⚫ Black", "white": "⚪ White", "purple": "🟣 Purple",
+            "yellow": "🟡 Yellow",
+        }
+        for key in _PCB_STYLE_KEYS:
+            self._cmb_pcb_color.addItem(_color_labels.get(key, key.title()), key)
+        self._cmb_pcb_color.currentIndexChanged.connect(self._on_pcb_color_changed)
+        ctrl_layout.addWidget(self._cmb_pcb_color)
+
         self._btn_reset = QPushButton()
         self._btn_reset.setFixedSize(70, 24)
         self._btn_reset.setStyleSheet("font-size: 11px;")
@@ -344,6 +363,12 @@ class View3D(QWidget):
         self._canvas._dirty = True
         self._canvas.update()
 
+    def _on_pcb_color_changed(self, index):
+        color_key = self._cmb_pcb_color.currentData()
+        self._canvas._board_style_override = None if color_key == "auto" else color_key
+        self._canvas._dirty = True
+        self._canvas.update()
+
     def _reset_view(self):
         self._canvas._rot_z = 45.0
         self._canvas._rot_x = 30.0
@@ -360,6 +385,7 @@ class View3D(QWidget):
         self._btn_reset.setText(tr("view3d_reset"))
         self._cb_wires.setText(tr("view3d_wires"))
         self._cb_3d_models.setText(tr("view3d_3d_models"))
+        self._lbl_pcb_color.setText(tr("view3d_pcb_color"))
 
     def _apply_theme(self):
         c = tc()
@@ -399,6 +425,7 @@ class _Canvas3D(QWidget):
         self._show_silkscreen = True
         self._show_3d_models = True
         self._model_registry: ModelRegistry | None = None
+        self._board_style_override: str | None = None
         self._dirty = True
         self._cached_pixmap: QPixmap | None = None
         self._throttle_timer: QTimer | None = None
@@ -412,10 +439,13 @@ class _Canvas3D(QWidget):
 
     def _determine_board_style(self, board: Board) -> dict:
         """Pick PCB solder mask color and features based on components."""
-        # Deterministic style from component hash
-        sig = "".join(sorted(c.ref + (c.value or "") for c in board.components))
-        style_idx = hash(sig) % len(_PCB_STYLE_KEYS)
-        style_key = _PCB_STYLE_KEYS[style_idx]
+        if self._board_style_override and self._board_style_override in _PCB_STYLES:
+            style_key = self._board_style_override
+        else:
+            # Deterministic style from component hash
+            sig = "".join(sorted(c.ref + (c.value or "") for c in board.components))
+            style_idx = hash(sig) % len(_PCB_STYLE_KEYS)
+            style_key = _PCB_STYLE_KEYS[style_idx]
         top, side, bottom, mask, mask_dark, border = _PCB_STYLES[style_key]
 
         n_comps = len(board.components)
