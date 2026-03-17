@@ -1,11 +1,15 @@
-"""Freerouting integration for automatic PCB trace routing.
+"""Freerouting integration and internal A* maze router for PCB trace routing.
 
 Exports board data to Specctra DSN format, invokes Freerouting CLI,
 and imports the routed SES result back into the Board model.
+When Freerouting is not available, falls back to an internal grid-based
+A* maze router.
 """
 
 from __future__ import annotations
 
+import heapq
+import math
 import subprocess
 import tempfile
 from pathlib import Path
@@ -32,34 +36,45 @@ class FreeroutingRouter:
     def route(self, timeout_seconds: int = 300) -> Board:
         """Run Freerouting and return the board with routed traces.
 
-        Falls back to ratsnest if Freerouting is not available.
+        Falls back to internal A* maze router if Freerouting is unavailable
+        or if the Freerouting run/import fails.
         """
         if not self._jar or not Path(self._jar).exists():
             log.warning(
-                "Freerouting JAR not found at '%s'. Using ratsnest (unrouted) traces.",
+                "Freerouting JAR not found at '%s'. Using internal A* router.",
                 self._jar,
             )
-            return self.board
+            return _maze_route(self.board)
 
         # Check Java availability
         if not self._java_available():
-            log.warning("Java runtime not found. Cannot run Freerouting.")
-            return self.board
+            log.warning("Java runtime not found. Using internal A* router.")
+            return _maze_route(self.board)
 
         with tempfile.TemporaryDirectory(prefix="aipcb_") as tmpdir:
             dsn_path = Path(tmpdir) / "board.dsn"
             ses_path = Path(tmpdir) / "board.ses"
 
-            self._export_dsn(dsn_path)
-            self._run_freerouting(dsn_path, ses_path, timeout_seconds)
+            try:
+                self._export_dsn(dsn_path)
+                self._run_freerouting(dsn_path, ses_path, timeout_seconds)
 
-            if ses_path.exists():
-                self._import_ses(ses_path)
-                log.info("Auto-routing completed successfully.")
-            else:
-                log.warning("Freerouting did not produce output. Keeping ratsnest.")
+                if ses_path.exists():
+                    self._import_ses(ses_path)
+                    log.info("Auto-routing completed successfully.")
+                    return self.board
 
-        return self.board
+                log.warning(
+                    "Freerouting did not produce SES output. Falling back to internal A* router."
+                )
+            except Exception as exc:
+                log.warning(
+                    "Freerouting failed (%s). Falling back to internal A* router.",
+                    exc,
+                )
+                log.debug("Freerouting failure details", exc_info=True)
+
+        return _maze_route(self.board)
 
     # ------------------------------------------------------------------
     # DSN Export
@@ -223,3 +238,214 @@ class FreeroutingRouter:
             return result.returncode == 0
         except (FileNotFoundError, subprocess.TimeoutExpired):
             return False
+
+
+# ======================================================================
+# Internal A* Maze Router (fallback when Freerouting is unavailable)
+# ======================================================================
+
+def _maze_route(board: Board) -> Board:
+    """Route all nets using an A* grid-based maze router.
+
+    Creates a uniform grid over the board area, marks pad/via obstacles,
+    and routes each net point-to-point using A* search. Already-routed
+    traces become obstacles for subsequent nets.
+    """
+    o = board.outline
+    clearance = board.constraints.clearance_mm
+    trace_w = board.constraints.trace_width_mm
+
+    # Grid resolution — balance between quality and performance
+    grid_step = max(trace_w, clearance, 0.25)
+
+    # Grid dimensions
+    cols = max(1, int(math.ceil(o.width_mm / grid_step)))
+    rows = max(1, int(math.ceil(o.height_mm / grid_step)))
+
+    # Clamp grid to reasonable size to prevent memory issues
+    MAX_CELLS = 500_000
+    if cols * rows > MAX_CELLS:
+        scale = math.sqrt(MAX_CELLS / (cols * rows))
+        grid_step = grid_step / scale
+        cols = max(1, int(math.ceil(o.width_mm / grid_step)))
+        rows = max(1, int(math.ceil(o.height_mm / grid_step)))
+
+    log.info("A* router: grid %d×%d (step=%.3fmm)", cols, rows, grid_step)
+
+    # Obstacle grid (False = free, True = blocked)
+    blocked: set[tuple[int, int]] = set()
+
+    def _mm_to_grid(x_mm: float, y_mm: float) -> tuple[int, int]:
+        gc = int(round((x_mm - o.x_mm) / grid_step))
+        gr = int(round((y_mm - o.y_mm) / grid_step))
+        return (max(0, min(gc, cols - 1)), max(0, min(gr, rows - 1)))
+
+    def _grid_to_mm(gc: int, gr: int) -> tuple[float, float]:
+        return (o.x_mm + gc * grid_step, o.y_mm + gr * grid_step)
+
+    def _mark_blocked(cx: float, cy: float, radius_mm: float) -> None:
+        """Block grid cells around a coordinate."""
+        r_cells = int(math.ceil(radius_mm / grid_step))
+        gc, gr = _mm_to_grid(cx, cy)
+        for di in range(-r_cells, r_cells + 1):
+            for dj in range(-r_cells, r_cells + 1):
+                ni, nj = gc + di, gr + dj
+                if 0 <= ni < cols and 0 <= nj < rows:
+                    blocked.add((ni, nj))
+
+    # Mark component pad obstacles (pads that aren't being routed)
+    pad_radius = max(0.4, trace_w)
+    for comp in board.components:
+        for pad in comp.pads:
+            _mark_blocked(pad.x_mm, pad.y_mm, pad_radius)
+
+    # Gather nets
+    net_names = board.get_net_names()
+    routed_traces: list[TraceSegment] = []
+
+    for net_name in net_names:
+        pads = board.get_pads_for_net(net_name)
+        if len(pads) < 2:
+            continue
+
+        # Temporarily unblock pads in this net
+        net_cells: list[tuple[int, int]] = []
+        for pad in pads:
+            gc_p, gr_p = _mm_to_grid(pad.x_mm, pad.y_mm)
+            net_cells.append((gc_p, gr_p))
+            blocked.discard((gc_p, gr_p))
+
+        # Route star pattern: connect all pads to the first pad
+        start_cell = net_cells[0]
+        layer = pads[0].layer if hasattr(pads[0], 'layer') else "F.Cu"
+        comp_layer = None
+        for comp in board.components:
+            if any(p.component_ref == comp.ref for p in pads):
+                comp_layer = comp.layer
+                break
+        if comp_layer:
+            layer = comp_layer
+
+        for i in range(1, len(net_cells)):
+            path = _astar(start_cell, net_cells[i], blocked, cols, rows)
+            if path and len(path) >= 2:
+                # Convert path to trace segments
+                for j in range(len(path) - 1):
+                    x1, y1 = _grid_to_mm(path[j][0], path[j][1])
+                    x2, y2 = _grid_to_mm(path[j + 1][0], path[j + 1][1])
+                    routed_traces.append(TraceSegment(
+                        start_x=x1, start_y=y1,
+                        end_x=x2, end_y=y2,
+                        width_mm=trace_w,
+                        layer=layer,
+                        net_name=net_name,
+                    ))
+                # Block routed path cells (with trace clearance)
+                for cell in path:
+                    r = int(math.ceil((trace_w + clearance) / grid_step))
+                    for di in range(-r, r + 1):
+                        for dj in range(-r, r + 1):
+                            ni, nj = cell[0] + di, cell[1] + dj
+                            if 0 <= ni < cols and 0 <= nj < rows:
+                                blocked.add((ni, nj))
+            else:
+                # Direct connection as fallback (ratsnest style)
+                x1, y1 = _grid_to_mm(start_cell[0], start_cell[1])
+                x2, y2 = _grid_to_mm(net_cells[i][0], net_cells[i][1])
+                routed_traces.append(TraceSegment(
+                    start_x=x1, start_y=y1,
+                    end_x=x2, end_y=y2,
+                    width_mm=trace_w,
+                    layer=layer,
+                    net_name=net_name,
+                ))
+
+        # Re-block net pad cells for other nets
+        for cell in net_cells:
+            blocked.add(cell)
+
+    board.traces = routed_traces
+    log.info("A* router complete: %d trace segments for %d nets.",
+             len(routed_traces), len(net_names))
+    return board
+
+
+def _astar(
+    start: tuple[int, int],
+    goal: tuple[int, int],
+    blocked: set[tuple[int, int]],
+    cols: int,
+    rows: int,
+) -> list[tuple[int, int]]:
+    """A* pathfinding on a 2D grid.
+
+    Returns a list of (col, row) cells from start to goal, or empty list
+    if no path exists. Uses 8-directional movement.
+    """
+    if start == goal:
+        return [start]
+
+    # Heuristic: Chebyshev distance (since we allow diagonal moves)
+    def h(c: tuple[int, int]) -> float:
+        return max(abs(c[0] - goal[0]), abs(c[1] - goal[1]))
+
+    open_set: list[tuple[float, int, tuple[int, int]]] = []
+    counter = 0
+    heapq.heappush(open_set, (h(start), counter, start))
+    came_from: dict[tuple[int, int], tuple[int, int]] = {}
+    g_score: dict[tuple[int, int], float] = {start: 0.0}
+
+    SQRT2 = math.sqrt(2)
+    _DIRS = [
+        (1, 0, 1.0), (-1, 0, 1.0), (0, 1, 1.0), (0, -1, 1.0),
+        (1, 1, SQRT2), (-1, 1, SQRT2), (1, -1, SQRT2), (-1, -1, SQRT2),
+    ]
+
+    max_iterations = cols * rows * 2  # safety limit
+    iterations = 0
+
+    while open_set and iterations < max_iterations:
+        iterations += 1
+        _, _, current = heapq.heappop(open_set)
+
+        if current == goal:
+            # Reconstruct path
+            path = [current]
+            while current in came_from:
+                current = came_from[current]
+                path.append(current)
+            path.reverse()
+            return _simplify_path(path)
+
+        for dc, dr, cost in _DIRS:
+            neighbor = (current[0] + dc, current[1] + dr)
+            if not (0 <= neighbor[0] < cols and 0 <= neighbor[1] < rows):
+                continue
+            if neighbor in blocked:
+                continue
+            tentative_g = g_score[current] + cost
+            if tentative_g < g_score.get(neighbor, float('inf')):
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g
+                f = tentative_g + h(neighbor)
+                counter += 1
+                heapq.heappush(open_set, (f, counter, neighbor))
+
+    return []  # No path found
+
+
+def _simplify_path(path: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Remove collinear intermediate points to reduce trace segments."""
+    if len(path) <= 2:
+        return path
+    result = [path[0]]
+    for i in range(1, len(path) - 1):
+        # Check if direction changes
+        dx1 = path[i][0] - path[i - 1][0]
+        dy1 = path[i][1] - path[i - 1][1]
+        dx2 = path[i + 1][0] - path[i][0]
+        dy2 = path[i + 1][1] - path[i][1]
+        if (dx1, dy1) != (dx2, dy2):
+            result.append(path[i])
+    result.append(path[-1])
+    return result

@@ -118,6 +118,8 @@ Realistic isometric **3D visualization** with:
 ### 🛠️ Bundled Vendor Tools
 All critical tools come **pre-bundled** — no separate installation needed:
 
+> Freerouting fix (March 17, 2026): Production file generation now falls back to the internal A* router when Freerouting fails or produces no SES output, instead of aborting the manufacturing/export workflow.
+
 | Tool | Version | Status |
 |------|---------|--------|
 | NgSpice | 45.2 | ✅ Bundled in `vendor/` |
