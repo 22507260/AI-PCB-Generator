@@ -15,7 +15,7 @@ from src.gui.theme import tc
 class AIWorker(QThread):
     """Background thread for AI circuit generation."""
 
-    finished = Signal(object)   # CircuitSpec or None
+    finished = Signal(object, object)   # CircuitSpec, validation warnings
     error = Signal(str)         # Error message
     progress = Signal(str)      # Status text
 
@@ -36,7 +36,7 @@ class AIWorker(QThread):
             self.progress.emit(tr("progress_validating"))
             validated, warnings = validate_circuit(spec)
 
-            self.finished.emit(validated)
+            self.finished.emit(validated, warnings)
         except AIClientError as e:
             self.error.emit(str(e))
         except Exception as e:
@@ -121,6 +121,11 @@ class InputPanel(QWidget):
         self._status_label.setWordWrap(True)
         layout.addWidget(self._status_label)
 
+        self._warnings_label = QLabel("")
+        self._warnings_label.setWordWrap(True)
+        self._warnings_label.setVisible(False)
+        layout.addWidget(self._warnings_label)
+
     # ------------------------------------------------------------------
 
     def _on_template_selected(self, index: int):
@@ -141,6 +146,8 @@ class InputPanel(QWidget):
         self._set_busy(True)
         self._status_label.setText(tr("status_starting_ai"))
         self._status_label.setStyleSheet(f"color: {tc().text_dim};")
+        self._warnings_label.setVisible(False)
+        self._warnings_label.setText("")
 
         self._worker = AIWorker(description)
         self._worker.finished.connect(self._on_finished)
@@ -148,7 +155,7 @@ class InputPanel(QWidget):
         self._worker.progress.connect(self._on_progress)
         self._worker.start()
 
-    def _on_finished(self, spec):
+    def _on_finished(self, spec, warnings):
         self._set_busy(False)
         self._status_label.setText(
             tr("success_circuit", name=spec.name,
@@ -163,13 +170,34 @@ class InputPanel(QWidget):
             )
         else:
             self._status_label.setStyleSheet(f"color: {tc().success};")
+
+        if warnings:
+            lines: list[str] = [tr("input_validation_warnings_title", count=len(warnings))]
+            for w in warnings[:5]:
+                sev = str(getattr(w, "severity", "warning")).upper()
+                msg = str(getattr(w, "message", w))
+                lines.append(f"[{sev}] {msg}")
+            if len(warnings) > 5:
+                lines.append(tr("input_validation_warnings_more", count=len(warnings) - 5))
+
+            self._warnings_label.setText("\n".join(lines))
+            self._warnings_label.setStyleSheet(f"color: {tc().warning}; font-size: 11px;")
+            self._warnings_label.setVisible(True)
+            self.status_message.emit(
+                tr("status_circuit_created_with_warnings", name=spec.name, count=len(warnings))
+            )
+        else:
+            self._warnings_label.setVisible(False)
+            self.status_message.emit(tr("status_circuit_created", name=spec.name))
+
         self.circuit_generated.emit(spec)
-        self.status_message.emit(tr("status_circuit_created", name=spec.name))
 
     def _on_error(self, msg: str):
         self._set_busy(False)
         self._status_label.setText(tr("error_circuit", error=msg))
         self._status_label.setStyleSheet(f"color: {tc().error};")
+        self._warnings_label.setVisible(False)
+        self._warnings_label.setText("")
         self.status_message.emit(tr("error_circuit", error=msg))
 
     def _on_progress(self, msg: str):

@@ -148,6 +148,13 @@ class DesignReviewPanel(QWidget):
         self._board = board
         if board:
             self._run_analysis()
+        else:
+            self._issues = []
+            self._tree.clear()
+            self._score_label.setText("—")
+            self._score_bar.setValue(0)
+            self._score_summary.setText("")
+            self._set_has_results(False)
 
     def _on_run(self):
         if self._board:

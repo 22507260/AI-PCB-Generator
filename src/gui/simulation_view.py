@@ -402,6 +402,19 @@ class SimulationView(QWidget):
 
         self._result_stack.setCurrentIndex(0)
 
+    def clear_circuit(self):
+        """Reset the simulation tab to its initial empty state."""
+        self._spec = None
+        self._writer = None
+        self._last_result = None
+        self._btn_run.setEnabled(False)
+        self._lbl_status.setText("")
+        self._signal_list.clear()
+        self._cmb_source.clear()
+        self._netlist_view.clear()
+        self._btn_netlist.setChecked(False)
+        self._result_stack.setCurrentIndex(0)
+
     # ------------------------------------------------------------------ slots
 
     @Slot(int)

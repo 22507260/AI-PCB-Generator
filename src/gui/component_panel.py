@@ -92,7 +92,7 @@ class ComponentPanel(QWidget):
             self._table.setItem(row, 6, QTableWidgetItem(comp.manufacturer_pn))
 
         self._count_label.setText(tr("label_component_count", count=spec.component_count))
-        self._export_btn.setEnabled(True)
+        self._export_btn.setEnabled(spec.component_count > 0)
 
     def _export_bom(self):
         if not self._spec:

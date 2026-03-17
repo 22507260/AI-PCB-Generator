@@ -241,6 +241,11 @@ class PCBView(QWidget):
         self._board = board
         self._view.render_board(board, self._visible_layers)
 
+    def clear_board(self):
+        """Clear the currently displayed board."""
+        self._board = None
+        self._view.clear_board()
+
     def _toggle_layer(self, layer: str, visible: bool):
         if visible:
             self._visible_layers.add(layer)
@@ -766,6 +771,12 @@ class _PCBGraphicsView(QGraphicsView):
         rect = self._scene.itemsBoundingRect().adjusted(-padding, -padding, padding, padding)
         self._scene.setSceneRect(rect)
         self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+
+    def clear_board(self):
+        """Clear all rendered board items."""
+        self._scene.clear()
+        self._scene.setSceneRect(QRectF(-100, -100, 200, 200))
+        self.viewport().update()
 
     def wheelEvent(self, event: QWheelEvent):
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15

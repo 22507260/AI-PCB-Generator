@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -285,7 +286,7 @@ def generate_production_package(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     result: dict[str, Path] = {}
-    project_name = spec.name.replace(" ", "_")
+    project_name = _safe_project_name(spec.name)
 
     # 1. Gerber files
     gerber_dir = output_dir / "gerber"
@@ -318,3 +319,11 @@ def generate_production_package(
         len(result), output_dir,
     )
     return result
+
+
+def _safe_project_name(name: str) -> str:
+    """Return a filesystem-safe project name."""
+    candidate = re.sub(r"\s+", "_", name.strip())
+    candidate = re.sub(r"[^A-Za-z0-9._-]", "_", candidate)
+    candidate = re.sub(r"_+", "_", candidate).strip("._")
+    return candidate or "pcb_project"

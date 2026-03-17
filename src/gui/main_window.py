@@ -330,6 +330,15 @@ class MainWindow(QMainWindow):
     def _new_project(self):
         self._spec = None
         self._board = None
+        empty = CircuitSpec(name="Untitled")
+        self._schematic_view.load_circuit(empty)
+        self._component_panel.load_circuit(empty)
+        self._pcb_view.clear_board()
+        self._view_3d.clear_board()
+        self._simulation_view.clear_circuit()
+        self._copilot.run_erc(None)
+        self._design_review.load_board(None)
+        self._tab_widget.setCurrentIndex(0)
         self._set_status(tr("status_new_project"))
 
     def _open_project(self):

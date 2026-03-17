@@ -333,6 +333,13 @@ class View3D(QWidget):
         self._canvas._dirty = True
         self._canvas.update()
 
+    def clear_board(self):
+        """Clear the currently displayed board."""
+        self._board = None
+        self._canvas.set_board(None)
+        self._canvas._dirty = True
+        self._canvas.update()
+
     def _on_toggle_components(self, checked):
         self._show_components = checked
         self._canvas._show_components = checked
@@ -433,7 +440,7 @@ class _Canvas3D(QWidget):
         self.setMinimumSize(400, 300)
         self.setMouseTracking(True)
 
-    def set_board(self, board: Board):
+    def set_board(self, board: Board | None):
         self._board = board
         self._dirty = True
 

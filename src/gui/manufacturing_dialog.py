@@ -11,7 +11,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
     QSpinBox, QGroupBox, QFrame, QFileDialog, QMessageBox,
-    QProgressBar, QLineEdit, QGridLayout, QWidget,
+    QProgressBar, QLineEdit, QGridLayout, QWidget, QCheckBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QColor, QDesktopServices
@@ -207,6 +207,13 @@ class ManufacturingDialog(QDialog):
         layout.addLayout(dir_layout)
 
         # ── Progress ──
+        self._opt_group = QGroupBox()
+        opt_layout = QVBoxLayout(self._opt_group)
+        self._cb_autoroute = QCheckBox()
+        self._cb_autoroute.setChecked(True)
+        opt_layout.addWidget(self._cb_autoroute)
+        layout.addWidget(self._opt_group)
+
         self._progress = QProgressBar()
         self._progress.setRange(0, 0)
         self._progress.setVisible(False)
@@ -304,7 +311,7 @@ class ManufacturingDialog(QDialog):
 
         self._worker = ManufacturingWorker(
             self._spec, output_dir, mfg_key,
-            auto_route=True,
+            auto_route=self._cb_autoroute.isChecked(),
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)
@@ -376,6 +383,8 @@ class ManufacturingDialog(QDialog):
         self._lbl_total.setText(tr("mfg_total"))
         self._lbl_lead_time.setText(tr("mfg_lead_time"))
         self._lbl_output.setText(tr("label_output_folder"))
+        self._opt_group.setTitle(tr("mfg_group_options"))
+        self._cb_autoroute.setText(tr("mfg_checkbox_autoroute"))
         self._btn_cancel.setText(tr("button_cancel"))
         self._btn_open_folder.setText(tr("mfg_open_folder"))
         self._btn_generate.setText(tr("mfg_generate"))
