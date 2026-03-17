@@ -13,6 +13,7 @@ from src.config import get_settings, ROOT_DIR
 from src.gui.i18n import tr, Translator
 from src.gui.theme import DARK_THEME, LIGHT_THEME, ThemeManager
 from src.vendor import get_tool_status
+from src.utils.env_file import merge_env_values
 from src.utils.logger import get_logger
 
 log = get_logger("gui.settings_dialog")
@@ -280,44 +281,45 @@ class SettingsDialog(QDialog):
     def _save(self):
         """Write settings to .env file."""
         env_path = ROOT_DIR / ".env"
-
-        lines = []
         api_key = self._api_key.text().strip()
-        if api_key:
-            lines.append(f"OPENAI_API_KEY={api_key}")
-
         base_url = self._base_url.text().strip()
-        if base_url:
-            lines.append(f"OPENAI_BASE_URL={base_url}")
-
-        lines.append(f"OPENAI_MODEL={self._model_combo.currentText()}")
-        lines.append(f"OPENAI_MAX_TOKENS={self._max_tokens_spin.value()}")
-
         kicad = self._kicad_path.text().strip()
-        if kicad:
-            lines.append(f"KICAD_PATH={kicad}")
-
         kicad_3d = self._kicad_3d_path.text().strip()
-        if kicad_3d:
-            lines.append(f"KICAD_3DMODELS_PATH={kicad_3d}")
-
         fr = self._fr_path.text().strip()
-        if fr:
-            lines.append(f"FREEROUTING_JAR={fr}")
-
         ngspice = self._ngspice_path.text().strip()
-        if ngspice:
-            lines.append(f"NGSPICE_PATH={ngspice}")
-
         lang = "tr" if self._lang_combo.currentIndex() == 0 else "en"
-        lines.append(f"LANGUAGE={lang}")
-
         theme = "dark" if self._theme_combo.currentIndex() == 0 else "light"
-        lines.append(f"THEME={theme}")
 
-        lines.append(f"LOG_LEVEL=INFO")
+        updates: dict[str, str | None] = {
+            "OPENAI_API_KEY": api_key or None,
+            "OPENAI_BASE_URL": base_url or None,
+            "OPENAI_MODEL": self._model_combo.currentText(),
+            "OPENAI_MAX_TOKENS": str(self._max_tokens_spin.value()),
+            "KICAD_PATH": kicad or None,
+            "KICAD_3DMODELS_PATH": kicad_3d or None,
+            "FREEROUTING_JAR": fr or None,
+            "NGSPICE_PATH": ngspice or None,
+            "LANGUAGE": lang,
+            "THEME": theme,
+            "LOG_LEVEL": "INFO",
+        }
+        ordered_keys = [
+            "OPENAI_API_KEY",
+            "OPENAI_BASE_URL",
+            "OPENAI_MODEL",
+            "OPENAI_MAX_TOKENS",
+            "KICAD_PATH",
+            "KICAD_3DMODELS_PATH",
+            "FREEROUTING_JAR",
+            "NGSPICE_PATH",
+            "LANGUAGE",
+            "THEME",
+            "LOG_LEVEL",
+        ]
 
-        env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        existing_text = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+        merged = merge_env_values(existing_text, updates, ordered_keys=ordered_keys)
+        env_path.write_text(merged, encoding="utf-8")
 
         # Clear settings cache so changes take effect
         get_settings.cache_clear()
