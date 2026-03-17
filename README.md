@@ -113,6 +113,8 @@ Realistic isometric **3D visualization** with:
 - **SVG** — High-quality vector graphics
 - **JSON** — Full circuit data for automation
 
+> Export fix (March 17, 2026): Gerber silkscreen export now derives component body bounds from pad geometry, resolving the `'PlacedComponent' object has no attribute 'width_mm'` crash seen during exports such as Arduino Uno Shield.
+
 ### 🛠️ Bundled Vendor Tools
 All critical tools come **pre-bundled** — no separate installation needed:
 

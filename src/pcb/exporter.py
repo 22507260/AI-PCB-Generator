@@ -147,6 +147,28 @@ _LAYER_COLORS = {
 }
 
 
+def _component_silk_bounds(
+    comp: PlacedComponent,
+    clearance_mm: float = 0.5,
+) -> tuple[float, float, float, float]:
+    """Estimate a silkscreen-safe component body box from pad extents."""
+    if not comp.pads:
+        half_w = 1.5
+        half_h = 1.0
+        return (
+            comp.x_mm - half_w,
+            comp.y_mm - half_h,
+            comp.x_mm + half_w,
+            comp.y_mm + half_h,
+        )
+
+    min_x = min(pad.x_mm - (pad.width_mm or 0.8) / 2 for pad in comp.pads) - clearance_mm
+    max_x = max(pad.x_mm + (pad.width_mm or 0.8) / 2 for pad in comp.pads) + clearance_mm
+    min_y = min(pad.y_mm - (pad.height_mm or pad.width_mm or 0.8) / 2 for pad in comp.pads) - clearance_mm
+    max_y = max(pad.y_mm + (pad.height_mm or pad.width_mm or 0.8) / 2 for pad in comp.pads) + clearance_mm
+    return min_x, min_y, max_x, max_y
+
+
 def export_svg(board: Board, path: Path | str) -> Path:
     """Render the board as an SVG image."""
     path = Path(path)
@@ -301,91 +323,292 @@ def export_json(board: Board, spec_dict: dict, path: Path | str) -> Path:
 
 
 # ======================================================================
-# Gerber exporter (simplified — single layer)
+# Gerber exporter (multi-layer RS-274X + Excellon drill)
 # ======================================================================
 
-def export_gerber(board: Board, output_dir: Path | str) -> list[Path]:
-    """Export Gerber files for each copper layer + drill file.
+def _mm_to_coord(mm: float) -> int:
+    """Convert mm to Gerber coordinate (4.6 format — micrometers)."""
+    return int(round(mm * 1_000_000))
 
-    This is a simplified RS-274X Gerber generator suitable for
-    basic 2-layer boards. For production use, KiCad's own Gerber
-    plotter should be used.
+
+def _gerber_header(file_function: str, layer_num: int = 1,
+                   layer_side: str = "Top") -> list[str]:
+    """Generate RS-274X header lines."""
+    lines = [
+        "G04 AI PCB Generator*",
+        "%FSLAX46Y46*%",
+        "%MOMM*%",
+        f"%TF.GenerationSoftware,AI-PCB-Generator,1.0*%",
+        f"%TF.FileFunction,{file_function}*%",
+    ]
+    return lines
+
+
+def _gerber_footer() -> list[str]:
+    return ["M02*"]
+
+
+def _write_gerber(path: Path, lines: list[str]) -> None:
+    path.write_text("\n".join(lines), encoding="ascii")
+
+
+def export_gerber(board: Board, output_dir: Path | str) -> list[Path]:
+    """Export production-ready Gerber files + Excellon drill file.
+
+    Generated files:
+      - F_Cu.gbr      — Front copper
+      - B_Cu.gbr      — Back copper
+      - F_Mask.gbr    — Front solder mask
+      - B_Mask.gbr    — Back solder mask
+      - F_SilkS.gbr   — Front silkscreen
+      - Edge_Cuts.gbr — Board outline
+      - drill.drl     — Excellon drill file (PTH + NPTH)
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     files: list[Path] = []
 
-    layer_map = {
-        "F.Cu": ("F_Cu.gbr", "GTL"),
-        "B.Cu": ("B_Cu.gbr", "GBL"),
-    }
+    o = board.outline
 
-    for layer_name, (filename, _ext) in layer_map.items():
+    # Collect pad sizes for aperture table
+    apertures: dict[str, int] = {}  # "C,0.250" -> D-code
+    next_d = 10
+
+    def _get_aperture(shape: str, w_mm: float, h_mm: float = 0) -> int:
+        nonlocal next_d
+        if shape == "circle":
+            key = f"C,{w_mm:.4f}"
+        else:
+            key = f"R,{w_mm:.4f}X{h_mm or w_mm:.4f}"
+        if key not in apertures:
+            apertures[key] = next_d
+            next_d += 1
+        return apertures[key]
+
+    # Pre-register common apertures
+    trace_widths = {t.width_mm for t in board.traces}
+    for tw in trace_widths:
+        _get_aperture("circle", tw)
+
+    for comp in board.components:
+        for pad in comp.pads:
+            pw = pad.width_mm or 0.8
+            ph = pad.height_mm or pw
+            _get_aperture(pad.shape or "circle", pw, ph)
+
+    for via in board.vias:
+        _get_aperture("circle", via.diameter_mm)
+
+    def _aperture_defs() -> list[str]:
+        lines = []
+        for key, d_code in sorted(apertures.items(), key=lambda x: x[1]):
+            lines.append(f"%ADD{d_code}{key}*%")
+        return lines
+
+    # ── Copper layers ──
+    for layer_name, file_func, filename in [
+        ("F.Cu", "Copper,L1,Top", "F_Cu.gbr"),
+        ("B.Cu", "Copper,L2,Bot", "B_Cu.gbr"),
+    ]:
         layer_traces = [t for t in board.traces if t.layer == layer_name]
         layer_pads = [
             p for c in board.components for p in c.pads
             if c.layer == layer_name or p.drill_mm > 0
         ]
+        layer_vias = board.vias if layer_name in ("F.Cu", "B.Cu") else []
 
-        if not layer_traces and not layer_pads:
+        if not layer_traces and not layer_pads and not layer_vias:
             continue
 
-        gerber_lines: list[str] = []
-        gerber_lines.append("%FSLAX36Y36*%")          # Format spec
-        gerber_lines.append("%MOIN*%")                  # Metric
-        gerber_lines.append("%MOMM*%")
-        gerber_lines.append(f"%TF.FileFunction,Copper,L1,Top*%")
-        gerber_lines.append("%ADD10C,0.250*%")          # Aperture D10 = circle 0.25mm
-        gerber_lines.append("%ADD11R,0.800X0.800*%")    # Aperture D11 = rect pad
-        gerber_lines.append("%ADD12C,0.800*%")          # Aperture D12 = round pad
+        lines = _gerber_header(file_func)
+        lines.extend(_aperture_defs())
 
         # Draw traces
-        gerber_lines.append("D10*")
         for trace in layer_traces:
-            x1 = int(trace.start_x * 1_000_000)
-            y1 = int(trace.start_y * 1_000_000)
-            x2 = int(trace.end_x * 1_000_000)
-            y2 = int(trace.end_y * 1_000_000)
-            gerber_lines.append(f"X{x1}Y{y1}D02*")
-            gerber_lines.append(f"X{x2}Y{y2}D01*")
+            d = _get_aperture("circle", trace.width_mm)
+            lines.append(f"D{d}*")
+            x1 = _mm_to_coord(trace.start_x)
+            y1 = _mm_to_coord(trace.start_y)
+            x2 = _mm_to_coord(trace.end_x)
+            y2 = _mm_to_coord(trace.end_y)
+            lines.append(f"X{x1}Y{y1}D02*")
+            lines.append(f"X{x2}Y{y2}D01*")
 
         # Flash pads
         for pad in layer_pads:
-            ap = "D12" if pad.shape == "circle" else "D11"
-            gerber_lines.append(f"{ap}*")
-            x = int(pad.x_mm * 1_000_000)
-            y = int(pad.y_mm * 1_000_000)
-            gerber_lines.append(f"X{x}Y{y}D03*")
+            pw = pad.width_mm or 0.8
+            ph = pad.height_mm or pw
+            d = _get_aperture(pad.shape or "circle", pw, ph)
+            lines.append(f"D{d}*")
+            x = _mm_to_coord(pad.x_mm)
+            y = _mm_to_coord(pad.y_mm)
+            lines.append(f"X{x}Y{y}D03*")
 
-        gerber_lines.append("M02*")  # End of file
+        # Flash vias
+        for via in layer_vias:
+            d = _get_aperture("circle", via.diameter_mm)
+            lines.append(f"D{d}*")
+            x = _mm_to_coord(via.x_mm)
+            y = _mm_to_coord(via.y_mm)
+            lines.append(f"X{x}Y{y}D03*")
 
+        lines.extend(_gerber_footer())
         fpath = output_dir / filename
-        fpath.write_text("\n".join(gerber_lines), encoding="ascii")
+        _write_gerber(fpath, lines)
         files.append(fpath)
 
-    # Drill file (Excellon format)
-    drill_pads = [
-        p for c in board.components for p in c.pads if p.drill_mm > 0
+    # ── Solder mask layers ──
+    mask_expansion = 0.05  # 50µm expansion from pad
+    for layer_name, file_func, filename in [
+        ("F.Cu", "Soldermask,Top", "F_Mask.gbr"),
+        ("B.Cu", "Soldermask,Bot", "B_Mask.gbr"),
+    ]:
+        layer_pads = [
+            p for c in board.components for p in c.pads
+            if c.layer == layer_name or p.drill_mm > 0
+        ]
+        if not layer_pads and not board.vias:
+            continue
+
+        mask_apertures: dict[str, int] = {}
+        mask_d = 10
+
+        def _get_mask_ap(shape: str, w: float, h: float = 0) -> int:
+            nonlocal mask_d
+            w_exp = w + mask_expansion * 2
+            h_exp = (h or w) + mask_expansion * 2
+            if shape == "circle":
+                key = f"C,{w_exp:.4f}"
+            else:
+                key = f"R,{w_exp:.4f}X{h_exp:.4f}"
+            if key not in mask_apertures:
+                mask_apertures[key] = mask_d
+                mask_d += 1
+            return mask_apertures[key]
+
+        lines = _gerber_header(file_func)
+
+        # Pre-compute apertures
+        for pad in layer_pads:
+            pw = pad.width_mm or 0.8
+            ph = pad.height_mm or pw
+            _get_mask_ap(pad.shape or "circle", pw, ph)
+        for via in board.vias:
+            _get_mask_ap("circle", via.diameter_mm)
+
+        for key, d_code in sorted(mask_apertures.items(), key=lambda x: x[1]):
+            lines.append(f"%ADD{d_code}{key}*%")
+
+        # Mask openings at pads
+        for pad in layer_pads:
+            pw = pad.width_mm or 0.8
+            ph = pad.height_mm or pw
+            d = _get_mask_ap(pad.shape or "circle", pw, ph)
+            lines.append(f"D{d}*")
+            x = _mm_to_coord(pad.x_mm)
+            y = _mm_to_coord(pad.y_mm)
+            lines.append(f"X{x}Y{y}D03*")
+
+        for via in board.vias:
+            d = _get_mask_ap("circle", via.diameter_mm)
+            lines.append(f"D{d}*")
+            x = _mm_to_coord(via.x_mm)
+            y = _mm_to_coord(via.y_mm)
+            lines.append(f"X{x}Y{y}D03*")
+
+        lines.extend(_gerber_footer())
+        fpath = output_dir / filename
+        _write_gerber(fpath, lines)
+        files.append(fpath)
+
+    # ── Silkscreen (front) ──
+    silk_lines = _gerber_header("Legend,Top")
+    silk_ap = 10
+    silk_lines.append(f"%ADD{silk_ap}C,0.150*%")  # 0.15mm line width
+    silk_lines.append(f"D{silk_ap}*")
+
+    for comp in board.components:
+        x0_mm, y0_mm, x1_mm, y1_mm = _component_silk_bounds(comp)
+        x0 = _mm_to_coord(x0_mm)
+        y0 = _mm_to_coord(y0_mm)
+        x1 = _mm_to_coord(x1_mm)
+        y1 = _mm_to_coord(y1_mm)
+        silk_lines.append(f"X{x0}Y{y0}D02*")
+        silk_lines.append(f"X{x1}Y{y0}D01*")
+        silk_lines.append(f"X{x1}Y{y1}D01*")
+        silk_lines.append(f"X{x0}Y{y1}D01*")
+        silk_lines.append(f"X{x0}Y{y0}D01*")
+
+    silk_lines.extend(_gerber_footer())
+    fpath = output_dir / "F_SilkS.gbr"
+    _write_gerber(fpath, silk_lines)
+    files.append(fpath)
+
+    # ── Edge Cuts (board outline) ──
+    edge_lines = _gerber_header("Profile,NP")
+    edge_ap = 10
+    edge_lines.append(f"%ADD{edge_ap}C,0.050*%")
+    edge_lines.append(f"D{edge_ap}*")
+
+    corners = [
+        (o.x_mm, o.y_mm),
+        (o.x_mm + o.width_mm, o.y_mm),
+        (o.x_mm + o.width_mm, o.y_mm + o.height_mm),
+        (o.x_mm, o.y_mm + o.height_mm),
     ]
-    drill_vias = board.vias
-    if drill_pads or drill_vias:
-        drill_lines: list[str] = []
-        drill_lines.append("M48")
-        drill_lines.append("METRIC,TZ")
-        drill_lines.append("T01C0.800")
+    x0 = _mm_to_coord(corners[0][0])
+    y0 = _mm_to_coord(corners[0][1])
+    edge_lines.append(f"X{x0}Y{y0}D02*")
+    for cx, cy in corners[1:]:
+        edge_lines.append(f"X{_mm_to_coord(cx)}Y{_mm_to_coord(cy)}D01*")
+    edge_lines.append(f"X{x0}Y{y0}D01*")  # close outline
+
+    edge_lines.extend(_gerber_footer())
+    fpath = output_dir / "Edge_Cuts.gbr"
+    _write_gerber(fpath, edge_lines)
+    files.append(fpath)
+
+    # ── Excellon drill file ──
+    drill_holes: list[tuple[float, float, float]] = []  # (x, y, diameter)
+    for comp in board.components:
+        for pad in comp.pads:
+            if pad.drill_mm > 0:
+                drill_holes.append((pad.x_mm, pad.y_mm, pad.drill_mm))
+    for via in board.vias:
+        drill_holes.append((via.x_mm, via.y_mm, via.drill_mm))
+
+    if drill_holes:
+        # Group by drill diameter
+        drill_by_size: dict[float, list[tuple[float, float]]] = {}
+        for x, y, d in drill_holes:
+            drill_by_size.setdefault(d, []).append((x, y))
+
+        drill_lines: list[str] = [
+            "M48",
+            ";TYPE=PLATED",
+            ";FORMAT={-:-/ absolute / metric / decimal}",
+            "FMAT,2",
+            "METRIC,TZ",
+        ]
+
+        # Tool definitions
+        tool_map: dict[float, int] = {}
+        for i, diameter in enumerate(sorted(drill_by_size.keys()), start=1):
+            tool_map[diameter] = i
+            drill_lines.append(f"T{i:02d}C{diameter:.3f}")
+
         drill_lines.append("%")
-        drill_lines.append("T01")
 
-        for pad in drill_pads:
-            x = f"{pad.x_mm:.3f}"
-            y = f"{pad.y_mm:.3f}"
-            drill_lines.append(f"X{x}Y{y}")
-        for via in drill_vias:
-            x = f"{via.x_mm:.3f}"
-            y = f"{via.y_mm:.3f}"
-            drill_lines.append(f"X{x}Y{y}")
+        # Drill hits
+        for diameter in sorted(drill_by_size.keys()):
+            tool = tool_map[diameter]
+            drill_lines.append(f"T{tool:02d}")
+            for x, y in drill_by_size[diameter]:
+                drill_lines.append(f"X{x:.3f}Y{y:.3f}")
 
+        drill_lines.append("T00")
         drill_lines.append("M30")
+
         drill_path = output_dir / "drill.drl"
         drill_path.write_text("\n".join(drill_lines), encoding="ascii")
         files.append(drill_path)

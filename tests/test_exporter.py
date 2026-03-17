@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from src.pcb.exporter import export_kicad_pcb, ExportError
+from src.pcb.exporter import export_gerber, export_kicad_pcb, ExportError
 from src.pcb.generator import (
     Board,
     BoardOutline,
@@ -83,3 +83,17 @@ class TestExportKicadPcb:
         assert '"F.Cu"' in content
         assert '"B.Cu"' in content
         assert '"Edge.Cuts"' in content
+
+
+class TestExportGerber:
+    def test_exports_silkscreen_for_components_without_explicit_body_size(self, board_with_components, tmp_path):
+        out_dir = tmp_path / "gerber"
+        files = export_gerber(board_with_components, out_dir)
+
+        assert files
+        silk_path = out_dir / "F_SilkS.gbr"
+        assert silk_path.exists()
+
+        content = silk_path.read_text(encoding="ascii")
+        assert "Legend,Top" in content
+        assert "D01*" in content
