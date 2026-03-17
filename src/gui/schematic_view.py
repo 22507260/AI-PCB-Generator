@@ -1234,7 +1234,7 @@ class SchematicView(QGraphicsView):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Delete or event.key() == Qt.Key.Key_Backspace:
-            self._delete_selected()
+            self.delete_selected()
             event.accept()
             return
         if event.key() == Qt.Key.Key_Escape:
@@ -1250,6 +1250,10 @@ class SchematicView(QGraphicsView):
         for item in list(self._scene.selectedItems()):
             if isinstance(item, ComponentItem):
                 self._undo_stack.push(_DeleteComponentCmd(self, item))
+
+    def delete_selected(self):
+        """Public API for deleting selected components."""
+        self._delete_selected()
 
     # ==================================================================
     # Drag & Drop (from ComponentPalette)

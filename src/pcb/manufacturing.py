@@ -287,16 +287,28 @@ def generate_production_package(
 
     result: dict[str, Path] = {}
     project_name = _safe_project_name(spec.name)
+    profile = MANUFACTURERS.get(manufacturer_key)
 
     # 1. Gerber files
     gerber_dir = output_dir / "gerber"
     gerber_files = export_gerber(board, gerber_dir)
 
     # 2. Create Gerber ZIP
-    zip_path = output_dir / f"{project_name}_gerber.zip"
+    zip_basename = "gerber.zip"
+    gerber_name_map: dict[str, str] = {}
+    if profile:
+        zip_basename = profile.gerber_zip_name or zip_basename
+        gerber_name_map = profile.file_naming
+
+    if not zip_basename.lower().endswith(".zip"):
+        zip_basename = f"{zip_basename}.zip"
+
+    zip_path = output_dir / f"{project_name}_{_safe_project_name(zip_basename)}"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for gf in gerber_files:
-            zf.write(gf, gf.name)
+            key = _gerber_file_key(gf.name)
+            arc_name = gerber_name_map.get(key, gf.name)
+            zf.write(gf, arc_name)
     result["gerber_zip"] = zip_path
 
     # 3. BOM CSV
@@ -327,3 +339,18 @@ def _safe_project_name(name: str) -> str:
     candidate = re.sub(r"[^A-Za-z0-9._-]", "_", candidate)
     candidate = re.sub(r"_+", "_", candidate).strip("._")
     return candidate or "pcb_project"
+
+
+def _gerber_file_key(filename: str) -> str:
+    """Map an exported Gerber/drill filename to a manufacturer naming key."""
+    key_map = {
+        "F_Cu.gbr": "F.Cu",
+        "B_Cu.gbr": "B.Cu",
+        "F_SilkS.gbr": "F.SilkS",
+        "B_SilkS.gbr": "B.SilkS",
+        "F_Mask.gbr": "F.Mask",
+        "B_Mask.gbr": "B.Mask",
+        "Edge_Cuts.gbr": "Edge.Cuts",
+        "drill.drl": "drill",
+    }
+    return key_map.get(filename, "")

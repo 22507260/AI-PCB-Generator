@@ -218,7 +218,7 @@ class MainWindow(QMainWindow):
         # Connect undo/redo actions to schematic undo stack
         self._act_undo.triggered.connect(self._schematic_view.undo_stack.undo)
         self._act_redo.triggered.connect(self._schematic_view.undo_stack.redo)
-        self._act_delete.triggered.connect(self._schematic_view._delete_selected)
+        self._act_delete.triggered.connect(self._schematic_view.delete_selected)
 
         self._pcb_view = PCBView()
         self._tab_widget.addTab(self._pcb_view, "")
