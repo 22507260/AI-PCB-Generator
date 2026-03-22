@@ -23,6 +23,71 @@ class ExportError(Exception):
 # KiCad .kicad_pcb exporter
 # ======================================================================
 
+def _fmt_mm(value: float) -> str:
+    """Format millimeter values compactly for KiCad text output."""
+    text = f"{value:.4f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _is_back_layer(layer: str) -> bool:
+    return layer.startswith("B.")
+
+
+def _silk_layer_for(comp: PlacedComponent) -> str:
+    return "B.SilkS" if _is_back_layer(comp.layer) else "F.SilkS"
+
+
+def _fab_layer_for(comp: PlacedComponent) -> str:
+    return "B.Fab" if _is_back_layer(comp.layer) else "F.Fab"
+
+
+def _pad_layers_for(comp: PlacedComponent, drill_mm: float) -> str:
+    if drill_mm > 0:
+        return '(layers "*.Cu" "*.Mask")'
+    if _is_back_layer(comp.layer):
+        return '(layers "B.Cu" "B.Mask" "B.Paste")'
+    return '(layers "F.Cu" "F.Mask" "F.Paste")'
+
+
+def _footprint_attr(comp: PlacedComponent) -> str:
+    if not comp.pads:
+        return ""
+    if all(pad.drill_mm <= 0 for pad in comp.pads):
+        return "smd"
+    if all(pad.drill_mm > 0 for pad in comp.pads):
+        return "through_hole"
+    return ""
+
+
+def _component_body_bounds(
+    comp: PlacedComponent,
+    margin_mm: float = 0.6,
+) -> tuple[float, float, float, float]:
+    """Estimate a local body box from pad extents for simple footprint outlines."""
+    if not comp.pads:
+        return (-1.5, -1.0, 1.5, 1.0)
+
+    min_x = min((pad.x_mm - comp.x_mm) - pad.width_mm / 2 for pad in comp.pads) - margin_mm
+    max_x = max((pad.x_mm - comp.x_mm) + pad.width_mm / 2 for pad in comp.pads) + margin_mm
+    min_y = min((pad.y_mm - comp.y_mm) - pad.height_mm / 2 for pad in comp.pads) - margin_mm
+    max_y = max((pad.y_mm - comp.y_mm) + pad.height_mm / 2 for pad in comp.pads) + margin_mm
+    return min_x, min_y, max_x, max_y
+
+
+def _append_fp_text(
+    lines: list[str],
+    kind: str,
+    text: str,
+    x_mm: float,
+    y_mm: float,
+    layer: str,
+) -> None:
+    lines.append(
+        f'    (fp_text {kind} "{text}" (at {_fmt_mm(x_mm)} {_fmt_mm(y_mm)}) (layer "{layer}")'
+    )
+    lines.append('      (effects (font (size 1 1) (thickness 0.15)))')
+    lines.append("    )")
+
 def export_kicad_pcb(board: Board, path: Path | str) -> Path:
     """Write the board as a KiCad 8 .kicad_pcb file."""
     path = Path(path)
@@ -70,18 +135,34 @@ def export_kicad_pcb(board: Board, path: Path | str) -> Path:
     # Board outline
     o = board.outline
     lines.append(
-        f"  (gr_rect (start {o.x_mm} {o.y_mm}) "
-        f"(end {o.x_mm + o.width_mm} {o.y_mm + o.height_mm}) "
+        f"  (gr_rect (start {_fmt_mm(o.x_mm)} {_fmt_mm(o.y_mm)}) "
+        f"(end {_fmt_mm(o.x_mm + o.width_mm)} {_fmt_mm(o.y_mm + o.height_mm)}) "
         f'(layer "Edge.Cuts") (stroke (width 0.1)))'
     )
 
     # Footprints (components)
     for comp in board.components:
-        lines.append(f'  (footprint "{comp.footprint}"')
+        footprint_name = comp.footprint or comp.ref
+        silk_layer = _silk_layer_for(comp)
+        fab_layer = _fab_layer_for(comp)
+        attr = _footprint_attr(comp)
+        min_x, min_y, max_x, max_y = _component_body_bounds(comp)
+
+        lines.append(f'  (footprint "{footprint_name}"')
         lines.append(f'    (layer "{comp.layer}")')
-        lines.append(f"    (at {comp.x_mm} {comp.y_mm} {comp.rotation_deg})")
-        lines.append(f'    (property "Reference" "{comp.ref}" (at 0 -2)  (layer "F.SilkS"))')
-        lines.append(f'    (property "Value" "{comp.value}" (at 0 2) (layer "F.Fab"))')
+        lines.append(
+            f"    (at {_fmt_mm(comp.x_mm)} {_fmt_mm(comp.y_mm)} {_fmt_mm(comp.rotation_deg)})"
+        )
+        if attr:
+            lines.append(f"    (attr {attr})")
+
+        _append_fp_text(lines, "reference", comp.ref, 0.0, min_y - 1.6, silk_layer)
+        _append_fp_text(lines, "value", comp.value, 0.0, max_y + 1.6, fab_layer)
+        lines.append(
+            f'    (fp_rect (start {_fmt_mm(min_x)} {_fmt_mm(min_y)}) '
+            f'(end {_fmt_mm(max_x)} {_fmt_mm(max_y)}) '
+            f'(stroke (width 0.12) (type solid)) (fill none) (layer "{silk_layer}"))'
+        )
 
         for pad in comp.pads:
             net_id = net_id_map.get(pad.net_name, 0)
@@ -90,13 +171,13 @@ def export_kicad_pcb(board: Board, path: Path | str) -> Path:
             rel_x = pad.x_mm - comp.x_mm
             rel_y = pad.y_mm - comp.y_mm
 
-            drill_str = f" (drill {pad.drill_mm})" if pad.drill_mm > 0 else ""
-            pad_layers = '(layers "F.Cu" "B.Cu" "*.Mask")' if pad.drill_mm > 0 else '(layers "F.Cu" "F.Mask" "F.Paste")'
+            drill_str = f" (drill {_fmt_mm(pad.drill_mm)})" if pad.drill_mm > 0 else ""
+            pad_layers = _pad_layers_for(comp, pad.drill_mm)
 
             lines.append(
                 f'    (pad "{pad.number}" {pad_type} {pad_shape} '
-                f"(at {rel_x} {rel_y}) "
-                f"(size {pad.width_mm} {pad.height_mm})"
+                f"(at {_fmt_mm(rel_x)} {_fmt_mm(rel_y)}) "
+                f"(size {_fmt_mm(pad.width_mm)} {_fmt_mm(pad.height_mm)})"
                 f"{drill_str} "
                 f"{pad_layers} "
                 f'(net {net_id} "{pad.net_name}"))'
@@ -107,9 +188,9 @@ def export_kicad_pcb(board: Board, path: Path | str) -> Path:
     for trace in board.traces:
         net_id = net_id_map.get(trace.net_name, 0)
         lines.append(
-            f"  (segment (start {trace.start_x} {trace.start_y}) "
-            f"(end {trace.end_x} {trace.end_y}) "
-            f"(width {trace.width_mm}) "
+            f"  (segment (start {_fmt_mm(trace.start_x)} {_fmt_mm(trace.start_y)}) "
+            f"(end {_fmt_mm(trace.end_x)} {_fmt_mm(trace.end_y)}) "
+            f"(width {_fmt_mm(trace.width_mm)}) "
             f'(layer "{trace.layer}") '
             f"(net {net_id}))"
         )
@@ -118,8 +199,8 @@ def export_kicad_pcb(board: Board, path: Path | str) -> Path:
     for via in board.vias:
         net_id = net_id_map.get(via.net_name, 0)
         lines.append(
-            f"  (via (at {via.x_mm} {via.y_mm}) "
-            f"(size {via.diameter_mm}) (drill {via.drill_mm}) "
+            f"  (via (at {_fmt_mm(via.x_mm)} {_fmt_mm(via.y_mm)}) "
+            f"(size {_fmt_mm(via.diameter_mm)}) (drill {_fmt_mm(via.drill_mm)}) "
             f'(layers "F.Cu" "B.Cu") '
             f"(net {net_id}))"
         )

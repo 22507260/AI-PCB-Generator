@@ -375,7 +375,7 @@ class MainWindow(QMainWindow):
         if not self._spec:
             QMessageBox.warning(self, tr("dialog_warning"), tr("warning_design_first"))
             return
-        dialog = ExportDialog(self._spec, self)
+        dialog = ExportDialog(self._spec, self._board, self)
         dialog.exec()
 
     def _manufacture(self):

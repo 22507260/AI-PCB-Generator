@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -32,6 +33,7 @@ class ExportWorker(QThread):
     def __init__(
         self,
         spec: CircuitSpec,
+        board: Board | None,
         output_dir: str,
         formats: dict[str, bool],
         auto_route: bool,
@@ -39,6 +41,7 @@ class ExportWorker(QThread):
     ):
         super().__init__(parent)
         self._spec = spec
+        self._board = board
         self._output_dir = Path(output_dir)
         self._formats = formats
         self._auto_route = auto_route
@@ -49,8 +52,11 @@ class ExportWorker(QThread):
 
             # Generate board
             self.progress.emit(tr("progress_creating_pcb"))
-            gen = PCBGenerator(self._spec)
-            board = gen.generate()
+            if self._board is not None:
+                board = copy.deepcopy(self._board)
+            else:
+                gen = PCBGenerator(self._spec)
+                board = gen.generate()
 
             # Auto-route
             if self._auto_route:
@@ -96,9 +102,10 @@ class ExportWorker(QThread):
 class ExportDialog(QDialog):
     """Dialog for configuring and executing PCB export."""
 
-    def __init__(self, spec: CircuitSpec, parent=None):
+    def __init__(self, spec: CircuitSpec, board: Board | None = None, parent=None):
         super().__init__(parent)
         self._spec = spec
+        self._board = board
         self._worker: ExportWorker | None = None
         self.setMinimumSize(500, 400)
         self._setup_ui()
@@ -211,7 +218,7 @@ class ExportDialog(QDialog):
         self._progress.setVisible(True)
 
         self._worker = ExportWorker(
-            self._spec, output_dir, formats,
+            self._spec, self._board, output_dir, formats,
             auto_route=self._cb_autoroute.isChecked(),
         )
         self._worker.progress.connect(self._on_progress)

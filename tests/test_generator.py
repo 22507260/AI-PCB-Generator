@@ -6,6 +6,7 @@ from src.ai.schemas import (
     CircuitSpec,
     ComponentCategory,
     ComponentSpec,
+    FootprintSpec,
     NetSpec,
     PinRef,
     PinSpec,
@@ -140,3 +141,43 @@ class TestPCBGenerator:
         assert len(board.components) == 3
         assert board.outline.width_mm > 0
         assert board.outline.height_mm > 0
+
+    def test_joins_explicit_footprint_library_and_name(self):
+        spec = CircuitSpec(
+            name="Footprint Join",
+            components=[
+                ComponentSpec(
+                    ref="R1",
+                    value="10k",
+                    category=ComponentCategory.RESISTOR,
+                    package="0805",
+                    footprint=FootprintSpec(
+                        library="Resistor_SMD",
+                        name="R_0805_2012Metric",
+                    ),
+                    pins=[PinSpec(number="1"), PinSpec(number="2")],
+                ),
+            ],
+            nets=[],
+        )
+
+        board = PCBGenerator(spec).generate()
+        assert board.components[0].footprint == "Resistor_SMD:R_0805_2012Metric"
+
+    def test_resolves_db_footprint_from_package(self):
+        spec = CircuitSpec(
+            name="Footprint Lookup",
+            components=[
+                ComponentSpec(
+                    ref="R1",
+                    value="10k",
+                    category=ComponentCategory.RESISTOR,
+                    package="0805",
+                    pins=[PinSpec(number="1"), PinSpec(number="2")],
+                ),
+            ],
+            nets=[],
+        )
+
+        board = PCBGenerator(spec).generate()
+        assert board.components[0].footprint == "Resistor_SMD:R_0805_2012Metric"

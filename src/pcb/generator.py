@@ -17,6 +17,7 @@ from src.ai.schemas import (
     NetSpec,
     PinRef,
 )
+from src.pcb.components import ComponentDB
 from src.utils.logger import get_logger
 
 log = get_logger("pcb.generator")
@@ -117,6 +118,7 @@ class PCBGenerator:
 
     def __init__(self, spec: CircuitSpec):
         self.spec = spec
+        self._footprint_cache: dict[tuple[str, str], str] = {}
 
     def generate(self) -> Board:
         """Build a Board from the circuit specification."""
@@ -178,7 +180,7 @@ class PCBGenerator:
         placed = PlacedComponent(
             ref=comp.ref,
             value=comp.value,
-            footprint=comp.footprint.name if comp.footprint else comp.package,
+            footprint=self._resolve_footprint(comp),
             x_mm=comp.x_mm,
             y_mm=comp.y_mm,
             rotation_deg=comp.rotation_deg,
@@ -235,6 +237,45 @@ class PCBGenerator:
                 ))
 
         return placed
+
+    def _resolve_footprint(self, comp: ComponentSpec) -> str:
+        """Resolve the most useful KiCad footprint identifier for export."""
+        if comp.footprint:
+            name = comp.footprint.name.strip()
+            library = comp.footprint.library.strip()
+            if library and ":" not in name:
+                return f"{library}:{name}"
+            if name:
+                return name
+
+        package = (comp.package or "").strip()
+        if ":" in package:
+            return package
+        if not package:
+            return comp.ref
+
+        category = comp.category.value
+        cache_key = (category, package)
+        if cache_key in self._footprint_cache:
+            return self._footprint_cache[cache_key]
+
+        resolved = package
+        try:
+            with ComponentDB() as db:
+                db_footprint = db.get_footprint(category, package).strip()
+                if db_footprint:
+                    resolved = db_footprint
+        except Exception:
+            log.debug(
+                "Footprint lookup failed for %s (%s / %s)",
+                comp.ref,
+                category,
+                package,
+                exc_info=True,
+            )
+
+        self._footprint_cache[cache_key] = resolved
+        return resolved
 
     def _assign_nets(self, board: Board) -> None:
         """Assign net names to pads based on the netlist."""

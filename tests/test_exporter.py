@@ -50,6 +50,14 @@ class TestExportKicadPcb:
         assert '"R1"' in content
         assert '"R2"' in content
 
+    def test_footprints_include_visible_text_and_body(self, board_with_components, tmp_path):
+        out = tmp_path / "visible.kicad_pcb"
+        export_kicad_pcb(board_with_components, out)
+        content = out.read_text(encoding="utf-8")
+        assert '(fp_text reference "R1"' in content
+        assert '(fp_text value "10k"' in content
+        assert "(fp_rect " in content
+
     def test_board_outline(self, board_with_components, tmp_path):
         out = tmp_path / "o.kicad_pcb"
         export_kicad_pcb(board_with_components, out)
