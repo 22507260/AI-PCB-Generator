@@ -19,7 +19,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Qt](https://img.shields.io/badge/GUI-PySide6%2FQt6-41CD52?logo=qt&logoColor=white)
 ![KiCad](https://img.shields.io/badge/KiCad-9.0-314CB0)
-![NgSpice](https://img.shields.io/badge/SPICE-NgSpice%2045-orange)
+![NgSpice](https://img.shields.io/badge/SPICE-NgSpice%2046-orange)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/otis21)
@@ -52,7 +52,7 @@ Full-featured schematic editor with **drag-and-drop** component placement, **rea
 Built-in **Electrical Rules Check** with 8 automated rules — unconnected power pins, missing resistors on LEDs, no ground, multiple output conflicts, missing decoupling capacitors, and more. Smart **pin alias matching** (VIN↔IN, GND↔VSS) eliminates false positives.
 
 ### ⚡ Real-Time SPICE Simulation
-Simulate your circuit **before manufacturing** with integrated **NgSpice 45** support:
+Simulate your circuit **before manufacturing** with integrated **NgSpice 46** support:
 - **DC Operating Point** — Node voltages and branch currents
 - **Transient Analysis** — Time-domain waveforms
 - **AC Frequency Sweep** — Bode plots and frequency response
@@ -122,7 +122,7 @@ All critical tools come **pre-bundled** — no separate installation needed:
 
 | Tool | Version | Status |
 |------|---------|--------|
-| NgSpice | 45.2 | ✅ Bundled in `vendor/` |
+| NgSpice | 46 | ✅ Bundled in `vendor/` |
 | Freerouting | 2.1.0 | ✅ Bundled in `vendor/` |
 | KiCad | 9.0 | 🔍 Auto-detected |
 
@@ -325,7 +325,7 @@ AI-PCB-Generator/
 │       ├── file_io.py              # Project save/load (.apcb)
 │       └── validators.py           # Input validation
 ├── vendor/                         # Bundled tools (auto-downloaded)
-│   ├── Spice64/                    # NgSpice 45.2
+│   ├── Spice64/                    # NgSpice 46
 │   └── freerouting-2.1.0.jar      # Freerouting
 ├── data/
 │   └── templates/                  # Built-in circuit templates

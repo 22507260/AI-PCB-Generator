@@ -9,6 +9,7 @@ from pathlib import Path
 from src.config import ROOT_DIR, get_settings
 
 VENDOR_DIR = ROOT_DIR / "vendor"
+VENDORED_NGSPICE_VERSION = "46"
 
 # ---------------------------------------------------------------------------
 # NgSpice
@@ -156,7 +157,7 @@ def get_tool_status() -> dict[str, dict]:
         "ngspice": {
             "found": ngspice is not None,
             "path": ngspice or "",
-            "version": "45.2" if ngspice and "vendor" in (ngspice or "") else "",
+            "version": VENDORED_NGSPICE_VERSION if ngspice and "vendor" in (ngspice or "") else "",
         },
         "freerouting": {
             "found": fr_jar is not None,
