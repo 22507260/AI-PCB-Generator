@@ -325,6 +325,26 @@ class ModelRegistry:
         """Find the .wrl file path for a component, or None."""
         if not self._models_dir:
             return None
+        # Resolved footprint identifiers are more precise than a category glob.
+        if ':' in package:
+            library, name = package.split(':', 1)
+            if any(c in library + name for c in ('/', '\\', '..')):
+                return None
+            exact = os.path.join(self._models_dir, library + '.3dshapes', name + '.wrl')
+            if os.path.isfile(exact):
+                return exact
+            package = name
+        # Full footprint names often match the filename directly.
+        if package and not any(c in package for c in ('/', '\\', '..', '*', '?', '[')):
+            for directory in sorted(Path(self._models_dir).glob('*.3dshapes')):
+                exact = directory / (package + '.wrl')
+                if exact.is_file():
+                    return str(exact)
+        # Ambiguous connector/sensor lookup previously picked an arbitrary model.
+        # Prefer a correctly sized built-in body to a physically different part.
+        if category in ('usb_connector', 'barrel_jack', 'jst_connector',
+                        'transformer', 'sensor', 'crystal'):
+            return None
         return _map_package(category, package, self._models_dir)
 
     def get_mesh(self, category: str, package: str) -> Optional[Mesh3D]:

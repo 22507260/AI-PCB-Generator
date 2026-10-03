@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-pcb-generator"
@@ -30,6 +30,10 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
+    "numpy>=1.24.0",
+    "pyqtgraph>=0.13.0",
+    "PyOpenGL>=3.1.7",
+    "shapely>=2.1.0",
 ]
 
 [project.optional-dependencies]

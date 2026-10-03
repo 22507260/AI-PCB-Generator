@@ -4,7 +4,8 @@ Parses the subset of VRML 2.0 used by KiCad StepUp exports:
   Shape, IndexedFaceSet, Coordinate, Material, Transform, DEF/USE.
 
 Returns a Mesh3D containing triangulated faces with RGB material colours.
-Coordinates are in millimetres (KiCad native unit).
+Coordinates retain native WRL units. KiCad footprint WRLs use 0.1 inch;
+the PCB scene converts them to millimetres once, after parsing.
 """
 
 from __future__ import annotations
@@ -325,7 +326,7 @@ def parse_vrml(filepath: str) -> Mesh3D:
 
             # Apply transforms from stack
             if coord_points and transform_stack:
-                for translation, rotation, scale in transform_stack:
+                for translation, rotation, scale in reversed(transform_stack):
                     coord_points = _apply_transform(
                         coord_points, translation, rotation, scale)
 
