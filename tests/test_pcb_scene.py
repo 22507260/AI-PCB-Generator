@@ -6,7 +6,13 @@ import pytest
 from shapely.geometry import Point, Polygon
 
 from src.models.model_registry import ModelRegistry
-from src.models.pcb_scene import build_scene, builtin_component, component_transform, local_pads
+from src.models.pcb_scene import (
+    build_scene,
+    builtin_component,
+    component_transform,
+    local_pads,
+    resistor_bands,
+)
 from src.models.vrml_parser import Face, Mesh3D, parse_vrml
 from src.pcb.generator import Board, BoardOutline, Pad, PlacedComponent, TraceSegment, Via
 
@@ -164,3 +170,51 @@ def test_nested_wrl_transforms_apply_from_inside_out(tmp_path):
     """)
     mesh = parse_vrml(str(path))
     assert mesh.faces[0].vertices == [(2, 0, 0), (4, 0, 0), (2, 2, 0)]
+
+
+@pytest.mark.parametrize("layer", ["F.Cu", "B.Cu"])
+def test_curved_lens_normals_survive_placement(layer):
+    comp = PlacedComponent(
+        ref="D1",
+        value="LED red",
+        footprint="LED_D3.0mm",
+        rotation_deg=37,
+        layer=layer,
+        x_mm=15,
+        y_mm=15,
+    )
+    board = Board(components=[comp])
+    scene = build_scene(board)
+    smooth = [tri for tri in scene.groups["components"] if tri.normals]
+    assert smooth
+    assert all(sum(v * v for v in n) == pytest.approx(1) for tri in smooth for n in tri.normals)
+    zs = [p[2] for tri in smooth for p in tri.vertices]
+    assert (max(zs) if layer == "F.Cu" else -min(zs) - board.thickness_mm) == pytest.approx(4.8)
+    assert any(len({tuple(round(v, 3) for v in n) for n in tri.normals}) > 1 for tri in smooth)
+
+
+def test_shadows_do_not_add_copper_or_close_drill_openings():
+    board = Board(
+        components=[PlacedComponent(ref="U1", x_mm=10, y_mm=10)],
+        vias=[Via(x_mm=10, y_mm=10, drill_mm=1)],
+    )
+    scene = build_scene(board)
+    assert scene.groups["shadows"]
+    assert not scene.groups["traces"]
+    for tri in scene.groups["shadows"]:
+        assert 0 < tri.opacity < 1
+        assert not Polygon([(x, y) for x, y, z in tri.vertices]).contains(Point(10, -10))
+
+
+def test_axial_resistor_value_bands_and_unknown_value():
+    assert resistor_bands("330")[:3] == [
+        (0.93, 0.28, 0.025),
+        (0.93, 0.28, 0.025),
+        (0.24, 0.10, 0.035),
+    ]
+    assert resistor_bands("10k")[:3] == [
+        (0.24, 0.10, 0.035),
+        (0.025, 0.025, 0.025),
+        (0.93, 0.28, 0.025),
+    ]
+    assert not resistor_bands("unknown")

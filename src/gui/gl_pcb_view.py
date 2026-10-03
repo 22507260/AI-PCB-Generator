@@ -12,7 +12,7 @@ from PySide6.QtOpenGLWidgets import QOpenGLWidget
 
 from src.gui.i18n import tr
 from src.gui.theme import tc
-from src.models.pcb_scene import Scene, surface
+from src.models.pcb_scene import GOLD, MASK, TIN, Scene, surface
 
 
 def reference_mesh(scene):
@@ -145,11 +145,15 @@ class GLPCBView(QOpenGLWidget):
             GL.glEnable(GL.GL_NORMALIZE)
             GL.glEnable(GL.GL_LIGHTING)
             GL.glEnable(GL.GL_LIGHT0)
+            GL.glEnable(GL.GL_LIGHT1)
+            GL.glShadeModel(GL.GL_SMOOTH)
             GL.glEnable(GL.GL_COLOR_MATERIAL)
             GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
             GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_TRUE)
-            GL.glLightModelfv(GL.GL_LIGHT_MODEL_AMBIENT, (0.30, 0.30, 0.30, 1))
-            GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, (0.85, 0.85, 0.85, 1))
+            GL.glLightModelfv(GL.GL_LIGHT_MODEL_AMBIENT, (0.20, 0.20, 0.20, 1))
+            GL.glLightfv(GL.GL_LIGHT0, GL.GL_DIFFUSE, (0.82, 0.80, 0.76, 1))
+            GL.glLightfv(GL.GL_LIGHT0, GL.GL_SPECULAR, (0.8, 0.8, 0.8, 1))
+            GL.glLightfv(GL.GL_LIGHT1, GL.GL_DIFFUSE, (0.24, 0.28, 0.34, 1))
             GL.glMaterialfv(GL.GL_FRONT_AND_BACK, GL.GL_SPECULAR, (0.18, 0.18, 0.18, 1))
             GL.glMaterialf(GL.GL_FRONT_AND_BACK, GL.GL_SHININESS, 28)
             self._ready = True
@@ -183,16 +187,41 @@ class GLPCBView(QOpenGLWidget):
                 raise RuntimeError("OpenGL display lists unavailable")
             self._lists[name] = handle
             gl.glNewList(handle, gl.GL_COMPILE)
-            gl.glBegin(gl.GL_TRIANGLES)
+            current_material = None
             for triangle in triangles:
                 color = triangle.color
-                if name == "board" and abs(triangle.normal[2]) > 0.9 and self.mask_color:
+                if name == "board" and color == MASK and self.mask_color:
                     color = self.mask_color
-                gl.glColor3f(*color)
-                gl.glNormal3f(*triangle.normal)
-                for point in triangle.vertices:
+                material = "metal" if color in (TIN, GOLD) else "plastic"
+                if name == "board":
+                    material = "mask" if triangle.color == MASK else "substrate"
+                elif name in ("silk", "shadows"):
+                    material = "matte"
+                elif color[0] > 0.6 and color[1] < 0.15:
+                    material = "lens"
+                if material != current_material:
+                    if current_material is not None:
+                        gl.glEnd()
+                    specular, shine = {
+                        "metal": (0.72, 80),
+                        "plastic": (0.13, 24),
+                        "mask": (0.28, 48),
+                        "substrate": (0.025, 8),
+                        "matte": (0, 1),
+                        "lens": (0.8, 95),
+                    }[material]
+                    gl.glMaterialfv(
+                        gl.GL_FRONT_AND_BACK, gl.GL_SPECULAR, (specular, specular, specular, 1)
+                    )
+                    gl.glMaterialf(gl.GL_FRONT_AND_BACK, gl.GL_SHININESS, shine)
+                    gl.glBegin(gl.GL_TRIANGLES)
+                    current_material = material
+                gl.glColor4f(*color, triangle.opacity)
+                for i, point in enumerate(triangle.vertices):
+                    gl.glNormal3f(*(triangle.normals[i] if triangle.normals else triangle.normal))
                     gl.glVertex3f(*point)
-            gl.glEnd()
+            if current_material is not None:
+                gl.glEnd()
             gl.glEndList()
         self._dirty = False
 
@@ -205,6 +234,7 @@ class GLPCBView(QOpenGLWidget):
             gl.glEnable(gl.GL_DEPTH_TEST)
             gl.glEnable(gl.GL_LIGHTING)
             gl.glEnable(gl.GL_LIGHT0)
+            gl.glEnable(gl.GL_LIGHT1)
             gl.glEnable(gl.GL_COLOR_MATERIAL)
             gl.glEnable(gl.GL_NORMALIZE)
             gl.glDisable(gl.GL_BLEND)
@@ -224,6 +254,7 @@ class GLPCBView(QOpenGLWidget):
             gl.glMatrixMode(gl.GL_MODELVIEW)
             gl.glLoadIdentity()
             gl.glLightfv(gl.GL_LIGHT0, gl.GL_POSITION, (-0.3, 0.5, 1, 0))
+            gl.glLightfv(gl.GL_LIGHT1, gl.GL_POSITION, (0.8, -0.3, 0.5, 0))
             gl.glTranslatef(-cam.pan[0], -cam.pan[1], 0)
             gl.glRotatef(cam.pitch, 1, 0, 0)
             gl.glRotatef(cam.yaw, 0, 0, 1)
@@ -231,6 +262,17 @@ class GLPCBView(QOpenGLWidget):
             if self._dirty:
                 self._compile()
             for name, handle in self._lists.items():
+                if name == "shadows":
+                    if self.visible_groups.get("components", True):
+                        gl.glDisable(gl.GL_LIGHTING)
+                        gl.glEnable(gl.GL_BLEND)
+                        gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+                        gl.glDepthMask(gl.GL_FALSE)
+                        gl.glCallList(handle)
+                        gl.glDepthMask(gl.GL_TRUE)
+                        gl.glDisable(gl.GL_BLEND)
+                        gl.glEnable(gl.GL_LIGHTING)
+                    continue
                 if name == "silk" and not self.show_silk:
                     continue
                 if self.visible_groups.get(name, True):

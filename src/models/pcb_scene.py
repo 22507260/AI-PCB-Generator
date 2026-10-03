@@ -32,6 +32,8 @@ BODY = (0.10, 0.11, 0.12)
 class Triangle:
     vertices: tuple[Vec3, Vec3, Vec3]
     color: Color
+    normals: tuple[Vec3, Vec3, Vec3] | None = None
+    opacity: float = 1.0
 
     @property
     def normal(self) -> Vec3:
@@ -94,7 +96,141 @@ def cuboid(x, y, w, h, z, height, color):
 
 
 def cylinder(x, y, radius, z, height, color):
-    return extrude(Point(x, y).buffer(radius, quad_segs=12), z, z + height, color)
+    triangles = extrude(Point(x, y).buffer(radius, quad_segs=16), z, z + height, color)
+    for tri in triangles:
+        if abs(tri.normal[2]) < 0.5:
+            tri.normals = tuple(((p[0] - x) / radius, (p[1] - y) / radius, 0) for p in tri.vertices)
+    return triangles
+
+
+def dome(x, y, radius, z, color):
+    """Smooth hemisphere for moulded indicator lenses."""
+    result = []
+
+    def point(ring, segment):
+        phi, theta = ring * math.pi / 16, segment * math.tau / 48
+        n = (math.cos(phi) * math.cos(theta), math.cos(phi) * math.sin(theta), math.sin(phi))
+        return (x + radius * n[0], y + radius * n[1], z + radius * n[2]), n
+
+    for ring in range(8):
+        for seg in range(48):
+            a, b, c, d = (
+                point(ring, seg),
+                point(ring, seg + 1),
+                point(ring + 1, seg + 1),
+                point(ring + 1, seg),
+            )
+            for triplet in ((a, b, c), (a, c, d)):
+                result.append(
+                    Triangle(tuple(p[0] for p in triplet), color, tuple(p[1] for p in triplet))
+                )
+    return result
+
+
+def bevel_body(x, y, w, h, z, height, color):
+    """Moulded package with clipped corners and a sloping top shoulder."""
+    bevel = min(0.22, w * 0.12, h * 0.12, height * 0.2)
+
+    def ring(inset, level):
+        a, b = w / 2 - inset, h / 2 - inset
+        c = min(bevel, a * 0.4, b * 0.4)
+        return [
+            (x - a + c, y - b, level),
+            (x + a - c, y - b, level),
+            (x + a, y - b + c, level),
+            (x + a, y + b - c, level),
+            (x + a - c, y + b, level),
+            (x - a + c, y + b, level),
+            (x - a, y + b - c, level),
+            (x - a, y - b + c, level),
+        ]
+
+    rings = [ring(0, z), ring(0, z + height - bevel), ring(bevel, z + height)]
+    result = surface(Polygon([(a, b) for a, b, _ in rings[0]]), z, color, True)
+    result += surface(
+        Polygon([(a, b) for a, b, _ in rings[-1]]),
+        z + height,
+        tuple(min(1, c * 1.18) for c in color),
+    )
+    for lower, upper in pairwise(rings):
+        for i in range(8):
+            j = (i + 1) % 8
+            result += [
+                Triangle((lower[i], lower[j], upper[j]), color),
+                Triangle((lower[i], upper[j], upper[i]), color),
+            ]
+    return result
+
+
+def lead_between(a: Vec3, b: Vec3, radius=0.18, color=TIN, caps=False):
+    """Round metal lead along an arbitrary segment, with smooth normals."""
+    axis = tuple(b[i] - a[i] for i in range(3))
+    length = math.sqrt(sum(v * v for v in axis))
+    if length < 1e-6:
+        return []
+    n = tuple(v / length for v in axis)
+    helper = (0, 0, 1) if abs(n[2]) < 0.9 else (1, 0, 0)
+    u = (
+        n[1] * helper[2] - n[2] * helper[1],
+        n[2] * helper[0] - n[0] * helper[2],
+        n[0] * helper[1] - n[1] * helper[0],
+    )
+    ul = math.sqrt(sum(v * v for v in u))
+    u = tuple(v / ul for v in u)
+    v = (n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0])
+    result = []
+    for i in range(12):
+        normals = [
+            tuple(
+                u[k] * math.cos(j * math.tau / 12) + v[k] * math.sin(j * math.tau / 12)
+                for k in range(3)
+            )
+            for j in (i, i + 1)
+        ]
+        pts = [
+            tuple(origin[k] + radius * normal[k] for k in range(3))
+            for origin, normal in (
+                (a, normals[0]),
+                (a, normals[1]),
+                (b, normals[1]),
+                (b, normals[0]),
+            )
+        ]
+        result += [
+            Triangle((pts[0], pts[1], pts[2]), color, (normals[0], normals[1], normals[1])),
+            Triangle((pts[0], pts[2], pts[3]), color, (normals[0], normals[1], normals[0])),
+        ]
+        if caps:
+            result += [Triangle((a, pts[1], pts[0]), color), Triangle((b, pts[3], pts[2]), color)]
+    return result
+
+
+def resistor_bands(value):
+    match = re.match(r"\s*(\d+(?:\.\d+)?)\s*([kKmM]?)", value)
+    if not match:
+        return []
+    number = float(match[1]) * {"": 1, "k": 1000, "K": 1000, "M": 1e6, "m": 0.001}[match[2]]
+    if number <= 0:
+        return [(0, 0, 0)]
+    exponent = math.floor(math.log10(number)) - 1
+    digits = round(number / 10**exponent)
+    if digits >= 100:
+        digits //= 10
+        exponent += 1
+    colors = [
+        (0.025, 0.025, 0.025),
+        (0.24, 0.10, 0.035),
+        (0.65, 0.035, 0.025),
+        (0.93, 0.28, 0.025),
+        (0.85, 0.68, 0.02),
+        (0.025, 0.35, 0.09),
+        (0.035, 0.10, 0.5),
+        (0.32, 0.065, 0.43),
+        (0.4, 0.42, 0.44),
+        (0.85, 0.86, 0.8),
+    ]
+    multiplier = colors[exponent] if 0 <= exponent <= 9 else GOLD if exponent == -1 else TIN
+    return [colors[digits // 10], colors[digits % 10], multiplier, GOLD]
 
 
 def category(comp: PlacedComponent) -> str:
@@ -167,30 +303,53 @@ def builtin_component(comp: PlacedComponent) -> list[Triangle]:
     color = BODY
     if kind in ("resistor", "capacitor", "diode") and (smd or size):
         color = (0.64, 0.46, 0.28) if kind == "capacitor" else BODY
-        result += cuboid(cx, cy, w, h, z, height, color)
+        result += bevel_body(cx, cy, w, h, z, height, color)
         for x in (cx - w * 0.4, cx + w * 0.4):
             result += cuboid(x, cy, w * 0.2, h + 0.04, 0.05, height + 0.14, TIN)
     elif kind in ("resistor", "diode"):
         z, height = 0.75, 1.6
-        result += cuboid(
-            cx, cy, w, h, z, height, (0.68, 0.59, 0.40) if kind == "resistor" else BODY
+        radius = 0.7
+        result += lead_between(
+            (cx - w / 2, cy, z + radius),
+            (cx + w / 2, cy, z + radius),
+            radius,
+            (0.68, 0.59, 0.4) if kind == "resistor" else BODY,
+            caps=True,
         )
-        result += cuboid(cx - w * 0.25, cy, w * 0.09, h + 0.025, z + 0.025, height, BODY)
+        bands = resistor_bands(comp.value) if kind == "resistor" else [TIN]
+        for i, band in enumerate(bands):
+            x = cx - w * 0.32 + i * w * 0.2
+            result += lead_between(
+                (x, cy, z + radius), (x + w * 0.065, cy, z + radius), radius + 0.015, band
+            )
     elif kind == "capacitor" and (
         "RADIAL" in pkg or "CP_" in pkg or "electro" in comp.value.lower()
     ):
         height = 6.0
-        result += cylinder(cx, cy, 2.5, 0.3, height, BODY)
+        result += cylinder(cx, cy, 2.5, 0.3, height, (0.055, 0.075, 0.10))
+        result += cylinder(cx, cy, 2.55, 0.3, 0.25, BODY)
         result += cylinder(cx, cy, 2.4, height + 0.3, 0.08, TIN)
-        result += cuboid(cx, cy, 3.5, 0.12, height + 0.39, 0.015, BODY)
+        result += cuboid(cx, cy, 3.5, 0.08, height + 0.39, 0.015, BODY)
+        result += cuboid(cx, cy, 0.08, 3.5, height + 0.39, 0.015, BODY)
+        result += cuboid(cx, cy - 2.46, 0.65, 0.10, 0.7, height - 0.65, (0.63, 0.65, 0.66))
     elif kind == "led" and not smd:
         height = 4.5
-        result += cylinder(cx, cy, 1.5, 0.3, height, (0.65, 0.07, 0.05))
+        led_color = (0.72, 0.025, 0.02)
+        for name, c in {
+            "green": (0.025, 0.5, 0.11),
+            "blue": (0.025, 0.14, 0.7),
+            "yellow": (0.8, 0.55, 0.025),
+        }.items():
+            if name in comp.value.lower():
+                led_color = c
+        result += cylinder(cx, cy, 1.5, 0.3, 3.0, led_color)
+        result += dome(cx, cy, 1.5, 3.3, led_color)
         result += cylinder(cx, cy, 1.7, 0.2, 0.3, (0.43, 0.05, 0.03))
     elif kind == "connector":
         height = 2.5
-        result += cuboid(cx, cy, span_x + 2.3, span_y + 2.3, 0.1, height, BODY)
+        result += bevel_body(cx, cy, span_x + 2.3, span_y + 2.3, 0.1, height, BODY)
         for x, y, _ in pads:
+            result += cuboid(x, y, 0.9, 0.9, height + 0.1, 0.08, (0.035, 0.038, 0.04))
             result += cuboid(x, y, 0.6, 0.6, 0, 5.5, GOLD)
     elif kind == "usb_connector":
         w, h, height = 8.9, 7.4, 3.2
@@ -211,7 +370,7 @@ def builtin_component(comp: PlacedComponent) -> list[Triangle]:
             w, h, height = 3.9, max(4.9, span_y + 1.2), 1.5
         else:
             w, h, height = max(2, span_x * 0.7), max(2, span_y * 0.8), 1.4
-        result += cuboid(cx, cy, w, h, 0.35, height, BODY)
+        result += bevel_body(cx, cy, w, h, 0.35, height, BODY)
         result += cylinder(
             cx - w * 0.32, cy + h * 0.32, 0.25, height + 0.36, 0.015, (0.55, 0.55, 0.55)
         )
@@ -226,19 +385,17 @@ def builtin_component(comp: PlacedComponent) -> list[Triangle]:
         height = 1.5
     if kind != "connector":
         for x, y, pad in pads:
-            if pad.drill_mm:
-                result += cylinder(
-                    x, y, min(0.25, pad.drill_mm * 0.35), -0.6, z + height * 0.45 + 0.6, TIN
-                )
             # Link body edge to its pad; never invent extra pins.
             ex, ey = max(cx - w / 2, min(cx + w / 2, x)), max(cy - h / 2, min(cy + h / 2, y))
-            lead = LineString([(ex, ey), (x, y)]).buffer(0.14, quad_segs=3)
-            result += extrude(lead, 0.07, 0.23, TIN)
+            level = z + min(height * 0.45, 0.9)
+            radius = min(0.18, pad.drill_mm * 0.3) if pad.drill_mm else 0.12
+            result += lead_between((ex, ey, level), (x, y, level), radius)
+            result += lead_between((x, y, level), (x, y, -0.6 if pad.drill_mm else 0.08), radius)
     return result
 
 
 def build_scene(board: Board, registry=None, use_models=True) -> Scene:
-    scene = Scene(groups={key: [] for key in ("board", "pads", "traces", "components")})
+    scene = Scene(groups={key: [] for key in ("board", "pads", "traces", "components", "shadows")})
     o, t = board.outline, board.thickness_mm
     outline = box(o.x_mm, -o.y_mm - o.height_mm, o.x_mm + o.width_mm, -o.y_mm)
     holes = [
@@ -252,10 +409,16 @@ def build_scene(board: Board, registry=None, use_models=True) -> Scene:
         if v.drill_mm > 0
     ]
     drilled = unary_union(holes)
-    scene.groups["board"] = extrude(outline.difference(drilled), -t, 0, MASK, FR4)
+    board_shape = outline.difference(drilled)
+    scene.groups["board"] = surface(board_shape, 0, MASK) + surface(board_shape, -t, MASK, True)
+    rim = min(0.045, t * 0.1)
+    for bottom, top, color in ((-rim, 0, MASK), (-t + rim, -rim, FR4), (-t, -t + rim, MASK)):
+        scene.groups["board"] += [
+            tri for tri in extrude(board_shape, bottom, top, color) if abs(tri.normal[2]) < 0.5
+        ]
     # Plated barrels line the actual drill openings; they do not cap the hole.
     for hole in holes:
-        for tri in extrude(hole.intersection(outline), -t - 0.01, 0.01, TIN):
+        for tri in extrude(hole.buffer(-0.002).intersection(outline), -t - 0.01, 0.01, TIN):
             if abs(tri.normal[2]) < 0.9:
                 scene.groups["pads"].append(tri)
     for comp in board.components:
@@ -312,11 +475,37 @@ def build_scene(board: Board, registry=None, use_models=True) -> Scene:
         else:
             triangles = builtin_component(comp)
         placed = [
-            Triangle(tuple(component_transform(comp, p, t) for p in tri.vertices), tri.color)
+            Triangle(
+                tuple(component_transform(comp, p, t) for p in tri.vertices),
+                tri.color,
+                tuple(
+                    tuple(
+                        component_transform(comp, n, t)[i]
+                        - component_transform(comp, (0, 0, 0), t)[i]
+                        for i in range(3)
+                    )
+                    for n in tri.normals
+                )
+                if tri.normals
+                else None,
+                tri.opacity,
+            )
             for tri in triangles
         ]
         scene.groups["components"] += placed
         back = comp.layer == "B.Cu"
+        # Soft contact shading is an optical overlay, not extra board copper.
+        points_xy = [(p[0], p[1]) for tri in placed for p in tri.vertices]
+        if points_xy:
+            from shapely.geometry import MultiPoint
+
+            hull = MultiPoint(points_xy).convex_hull
+            if isinstance(hull, Polygon):
+                for distance, alpha in ((0.8, 0.035), (0.5, 0.055), (0.2, 0.085), (0, 0.12)):
+                    shadow = hull.buffer(distance).intersection(outline).difference(drilled)
+                    for tri in surface(shadow, -t - 0.004 if back else 0.004, (0, 0, 0), back):
+                        tri.opacity = alpha
+                        scene.groups["shadows"].append(tri)
         points = [p for tri in placed for p in tri.vertices]
         ys = [p[1] for p in points] or [-comp.y_mm]
         y = min(ys) - 1.5 if back else max(ys) + 0.7
