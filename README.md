@@ -105,6 +105,12 @@ orthographic top, bottom and isometric inspection views.
   retain their footprint origin, convert 0.1-inch units to millimetres, and apply
   component rotation and back-side placement. Ambiguous connector models use a
   built-in approximation.
+- Built-in models include bevelled package shoulders, domed LED lenses, smooth
+  cylindrical surfaces, curved metal leads, axial resistor value bands and
+  electrolytic-capacitor vent/polarity details. Metal, plastic, lenses and solder
+  mask use distinct specular responses under key/fill lights. Subtle contact
+  shading grounds components on the board; it is an approximate visual effect,
+  not ray-traced shadowing or extra copper geometry.
 - **Visibility** controls components, traces, reference markings, KiCad models
   and unrouted connection guides. Guides are off by default and appear as straight
   lines rather than physical jumper wires.
