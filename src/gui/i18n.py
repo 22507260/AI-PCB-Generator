@@ -573,6 +573,41 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 }
 
 
+_TRANSLATIONS['en'].update({
+    'view3d_iso': 'Isometric', 'view3d_top': 'Top', 'view3d_bottom': 'Bottom',
+    'view3d_fit': 'Fit', 'view3d_layers': 'Visibility', 'view3d_components': 'Components',
+    'view3d_traces': 'Copper traces', 'view3d_silk': 'References',
+    'view3d_guides': 'Unrouted connections', 'view3d_models': 'KiCad models',
+    'view3d_empty': 'Open or generate a circuit to inspect its PCB.',
+    'view3d_fallback': 'OpenGL unavailable — software preview active.',
+    'view3d_dimensions': '{width} × {height} × {thickness} mm  ·  {count} components',
+    'view3d_hint': 'Drag: rotate  ·  Right/middle drag: pan  ·  Scroll: zoom  ·  Double-click: fit',
+    'color_green': 'Green', 'color_blue': 'Blue', 'color_red': 'Red',
+    'color_black': 'Black', 'color_white': 'White', 'color_purple': 'Purple',
+    'dock_design': 'Circuit design', 'dock_palette': 'Component library', 'dock_bom': 'Components',
+})
+_TRANSLATIONS['tr'].update({
+    'view3d_iso': 'İzometrik', 'view3d_top': 'Üst', 'view3d_bottom': 'Alt',
+    'view3d_fit': 'Sığdır', 'view3d_layers': 'Görünürlük', 'view3d_components': 'Bileşenler',
+    'view3d_traces': 'Bakır yollar', 'view3d_silk': 'Referanslar',
+    'view3d_guides': 'Çizilmemiş bağlantılar', 'view3d_models': 'KiCad modelleri',
+    'view3d_empty': 'PCB görünümü için bir devre açın veya oluşturun.',
+    'view3d_fallback': 'OpenGL kullanılamıyor — yazılımsal önizleme etkin.',
+    'view3d_dimensions': '{width} × {height} × {thickness} mm  ·  {count} bileşen',
+    'view3d_hint': 'Sürükle: döndür  ·  Sağ/orta tuş: kaydır  ·  Tekerlek: yakınlaştır  ·  Çift tık: sığdır',
+    'color_green': 'Yeşil', 'color_blue': 'Mavi', 'color_red': 'Kırmızı',
+    'color_black': 'Siyah', 'color_white': 'Beyaz', 'color_purple': 'Mor',
+    'dock_design': 'Devre tasarımı', 'dock_palette': 'Bileşen kütüphanesi', 'dock_bom': 'Bileşenler',
+})
+
+# Primary workspace labels use standard icons rather than emoji glyphs.
+for _language in _TRANSLATIONS.values():
+    for _key in list(_language):
+        if _key.startswith(('toolbar_', 'tab_', 'action_', 'menu_')) or _key in (
+            'title_circuit_desc', 'button_design', 'button_clear', 'bom_title', 'palette_title'):
+            _language[_key] = _language[_key].lstrip('📄📂💾📦📤🏭⚙️🔧🔌📐🖥️⚡🔍🧠🆕✏️🗑️↩️↪️🔎❓ℹ️🧊🔗🧩 ').strip()  # noqa: B005 -- This is an explicit set of leading icon characters.
+
+
 class Translator(QObject):
     """Singleton translator with live language switching."""
 
