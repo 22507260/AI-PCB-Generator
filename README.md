@@ -94,11 +94,44 @@ Go from design to **production order** with a single click:
 - **Capability Validation** — Warns if your design exceeds manufacturer limits
 
 ### 🖥️ Professional 3D PCB Viewer
-Realistic isometric **3D visualization** with:
-- KiCad `.wrl` 3D model loading (VRML 2.0 parser)
-- 18+ built-in component models (resistors, capacitors, ICs, connectors, LEDs...)
-- Layer toggles (copper, silkscreen, 3D models, wires)
-- Smooth rotation, pan, and zoom controls
+The viewer uses `QOpenGLWidget` and PyOpenGL with depth testing, directional
+lighting, multisample antialiasing (when supported by the driver), and
+orthographic top, bottom and isometric inspection views.
+
+- Board dimensions, thickness, pads, drill openings, vias and front/back traces
+  come from the current board data. No decorative mounting holes or copper pours
+  are added. Internal copper layers are not exposed in this surface viewer.
+- Package-aware built-in bodies work without KiCad. Matching KiCad `.wrl` models
+  retain their footprint origin, convert 0.1-inch units to millimetres, and apply
+  component rotation and back-side placement. Ambiguous connector models use a
+  built-in approximation.
+- **Visibility** controls components, traces, reference markings, KiCad models
+  and unrouted connection guides. Guides are off by default and appear as straight
+  lines rather than physical jumper wires.
+  Newly generated boards currently contain unrouted guides; copper traces appear
+  after routing has produced physical trace segments.
+- Left drag rotates; right/middle drag pans; scrolling zooms around the pointer.
+  Double-click or **Fit** frames the board. **Top**, **Bottom** and **Isometric**
+  provide preset views. The existing zoom menu actions also work in the 3D tab.
+- If imports, context creation or drawing fail, a status message identifies the
+  software preview. It preserves the previous isometric renderer with simpler
+  depth handling and model placement than the OpenGL renderer.
+
+![OpenGL PCB workspace](assets/screenshots/workspace-dark.png)
+
+The AI input, component library and BOM are independent dock panels: close them
+to enlarge the workspace and reopen them from **View**. Library and BOM panels
+share tabs by default. Both light/dark themes and live Turkish/English switching
+are supported; the toolbar uses theme-aware line icons.
+
+| Before: software isometric renderer | After: depth-tested OpenGL renderer |
+| --- | --- |
+| ![Previous PCB preview](assets/screenshots/3d-before.png) | ![New PCB preview](assets/screenshots/3d-after.png) |
+
+The comparison uses the same synthetic motor-driver board, physical camera
+orientation and pixel scale. This fixture is for visual verification, not an
+electrically validated manufacturing design. Built-in bodies are approximate;
+the viewer does not repair footprint/pad inaccuracies in the board generator.
 
 ### 🔧 PCB Layout Engine
 - KiCad-quality **EDA-style** layout rendering
@@ -341,6 +374,26 @@ AI-PCB-Generator/
 pip install -e ".[dev]"
 pytest
 ```
+
+Geometry, camera, dock controls, translations and software fallback have automated
+coverage. A desktop OpenGL smoke test checks a rendered framebuffer; it skips on
+the `offscreen` / `minimal` Qt platforms or when no context is available.
+Headless CI can run `QT_QPA_PLATFORM=offscreen pytest` (PowerShell:
+`$env:QT_QPA_PLATFORM='offscreen'; pytest`).
+
+To regenerate LED, voltage regulator, motor-driver, bottom-view and workspace
+screenshots on a desktop with OpenGL, without an API key or KiCad:
+
+```bash
+python tools/capture_pcb_workspace.py
+```
+
+The capture tool fails if OpenGL falls back. Images go to `assets/screenshots/`;
+the before image uses the pinned pre-change renderer from commit `9eae9db`.
+Open `data/examples/led_circuit.apcb` or `data/examples/voltage_regulator.apcb`
+via **File → Open** to inspect a sample without calling an AI provider.
+The accelerated viewer requires OpenGL 2.1 compatibility support. STEP import
+and ray tracing are not included.
 
 ---
 
