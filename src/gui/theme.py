@@ -34,9 +34,9 @@ class _Colors:
 
 _DARK = _Colors(
     bg="#0d1117",          bg_secondary="#161b22",   bg_input="#0d1117",
-    surface="#1a1a2e",     text="#e6edf3",           text_dim="#8b949e",
+    surface="#161b22",     text="#e6edf3",           text_dim="#8b949e",
     border="#30363d",      border_light="#21262d",
-    accent="#8957e5",      accent_hover="#a371f7",
+    accent="#58a6ff",      accent_hover="#79b8ff",
     success="#3fb950",     warning="#d29922",        error="#f85149",
     info="#58a6ff",
     scene_bg="#0d1117",    scene_grid="#1a2030",     scene_text="#e6edf3",
@@ -52,7 +52,7 @@ _LIGHT = _Colors(
     bg="#ffffff",          bg_secondary="#f6f8fa",   bg_input="#ffffff",
     surface="#f6f8fa",     text="#24292f",            text_dim="#57606a",
     border="#d0d7de",      border_light="#eaeef2",
-    accent="#6d28d9",      accent_hover="#7c3aed",
+    accent="#2563eb",      accent_hover="#3b82f6",
     success="#16a34a",     warning="#b45309",         error="#dc2626",
     info="#2563eb",
     scene_bg="#f8f9fb",    scene_grid="#e2e6ea",      scene_text="#24292f",
@@ -711,3 +711,43 @@ QLabel#successLabel {
     color: #16a34a;
 }
 """
+
+
+
+def _workspace_styles(c: _Colors) -> str:
+    """Shared engineering-workspace styles override historical QSS colours."""
+    return f"""
+    QWidget {{ background: {c.bg}; color: {c.text}; font-family: 'Segoe UI'; font-size: 12px; }}
+    QMainWindow, QDialog {{ background: {c.bg}; }}
+    QMenuBar, QMenu, QToolBar, QStatusBar {{ background: {c.bg_secondary}; color: {c.text}; }}
+    QMenu::item:selected, QMenuBar::item:selected {{ background: {c.hover_bg}; }}
+    QToolBar {{ border: 0; border-bottom: 1px solid {c.border}; padding: 4px; spacing: 5px; }}
+    QToolButton {{ background: transparent; border: 1px solid transparent; border-radius: 3px; padding: 5px 7px; }}
+    QToolButton:hover, QToolButton:checked {{ background: {c.hover_bg}; border-color: {c.border}; }}
+    QDockWidget {{ border: 1px solid {c.border}; }}
+    QDockWidget::title {{ background: {c.bg_secondary}; padding: 7px; font-weight: 600; }}
+    QTabWidget::pane {{ border: 1px solid {c.border}; background: {c.bg}; }}
+    QTabBar::tab {{ background: {c.bg_secondary}; color: {c.text_dim}; padding: 9px 14px; border: 0; border-bottom: 2px solid transparent; }}
+    QTabBar::tab:selected {{ background: {c.bg}; color: {c.text}; border-bottom-color: {c.info}; }}
+    QPushButton {{ background: {c.info}; color: {'#ffffff' if c is _LIGHT else '#0d1117'}; border: 1px solid {c.info}; border-radius: 4px; padding: 6px 10px; font-weight: 600; }}
+    QPushButton:hover {{ background: {c.accent_hover}; }}
+    QPushButton#secondaryButton {{ background: {c.bg_secondary}; color: {c.text}; border-color: {c.border}; }}
+    QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {{ background: {c.bg_input}; color: {c.text}; border: 1px solid {c.border}; border-radius: 4px; padding: 5px; }}
+    QComboBox QAbstractItemView {{ background: {c.bg_secondary}; color: {c.text}; selection-background-color: {c.selected_bg}; }}
+    QTableWidget, QTreeWidget, QListWidget {{ background: {c.bg}; alternate-background-color: {c.bg_secondary}; color: {c.text}; border: 1px solid {c.border}; gridline-color: {c.border_light}; selection-background-color: {c.selected_bg}; }}
+    QHeaderView::section {{ background: {c.bg_secondary}; color: {c.text_dim}; border: 0; border-bottom: 1px solid {c.border}; padding: 6px; }}
+    QGroupBox {{ border: 1px solid {c.border}; border-radius: 4px; margin-top: 12px; padding: 10px; }}
+    QGroupBox::title {{ color: {c.text_dim}; subcontrol-origin: margin; left: 8px; }}
+    QCheckBox {{ color: {c.text}; }}
+    QCheckBox::indicator {{ border-color: {c.border}; background: {c.bg_input}; }}
+    QCheckBox::indicator:checked {{ background: {c.info}; border-color: {c.info}; }}
+    QSplitter::handle {{ background: {c.border_light}; }}
+    QLabel#titleLabel {{ font-size: 15px; color: {c.text}; font-weight: 600; }}
+    QLabel#subtitleLabel {{ color: {c.text_dim}; font-size: 11px; }}
+    QScrollBar:vertical, QScrollBar:horizontal {{ background: {c.bg_secondary}; }}
+    QScrollBar::handle {{ background: {c.border}; border-radius: 3px; }}
+    """
+
+
+DARK_THEME += _workspace_styles(_DARK)
+LIGHT_THEME += _workspace_styles(_LIGHT)

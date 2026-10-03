@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QSplitter, QTabWidget, QMenuBar,
     QStatusBar, QToolBar, QFileDialog, QMessageBox,
-    QWidget, QVBoxLayout,
+    QWidget, QVBoxLayout, QDockWidget,
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction, QKeySequence
@@ -29,6 +29,8 @@ from src.gui.export_dialog import ExportDialog
 from src.gui.manufacturing_dialog import ManufacturingDialog
 from src.gui.settings_dialog import SettingsDialog
 from src.gui.i18n import tr, Translator
+from src.gui.icons import workspace_icon
+from src.gui.theme import ThemeManager
 from src.utils.file_io import save_project, load_project
 from src.utils.logger import get_logger
 
@@ -43,7 +45,7 @@ class MainWindow(QMainWindow):
         self._spec: CircuitSpec | None = None
         self._board: Board | None = None
 
-        self.setMinimumSize(1200, 750)
+        self.setMinimumSize(960, 640)
         self.resize(1400, 850)
 
         self._setup_menubar()
@@ -53,6 +55,7 @@ class MainWindow(QMainWindow):
         self._retranslate()
 
         Translator.instance().language_changed.connect(self._retranslate)
+        ThemeManager.instance().theme_changed.connect(self._apply_toolbar_icons)
 
     # ==================================================================
     # UI Setup
@@ -165,6 +168,15 @@ class MainWindow(QMainWindow):
         self._tb_wire = self._toolbar.addAction("")
         self._tb_wire.setCheckable(True)
         self._tb_wire.toggled.connect(self._toggle_wire_mode)
+        self._toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self._apply_toolbar_icons()
+        self._toolbar.removeAction(self._tb_wire)
+        self._toolbar.insertAction(self._tb_export, self._tb_wire)
+        self._toolbar.insertSeparator(self._tb_export)
+
+    def _apply_toolbar_icons(self):
+        for name in ('new', 'open', 'save', 'export', 'manufacture', 'settings', 'wire'):
+            getattr(self, '_tb_'+name).setIcon(workspace_icon(name))
 
     def _setup_central(self):
         central = QWidget()
@@ -172,25 +184,26 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Main splitter: left (input + palette + BOM) | right (viewers)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        # Left panel
-        left_splitter = QSplitter(Qt.Orientation.Vertical)
-
         self._input_panel = InputPanel()
         self._input_panel.circuit_generated.connect(self._on_circuit_generated)
         self._input_panel.status_message.connect(self._set_status)
-        left_splitter.addWidget(self._input_panel)
-
         self._component_palette = ComponentPalette()
-        left_splitter.addWidget(self._component_palette)
-
         self._component_panel = ComponentPanel()
-        left_splitter.addWidget(self._component_panel)
-
-        left_splitter.setSizes([300, 250, 200])
-        splitter.addWidget(left_splitter)
+        self._docks = {}
+        for key, widget in (('design', self._input_panel),
+                            ('palette', self._component_palette), ('bom', self._component_panel)):
+            dock = QDockWidget('', self)
+            dock.setObjectName('dock_'+key)
+            dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
+            dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable |
+                             QDockWidget.DockWidgetFeature.DockWidgetMovable)
+            dock.setWidget(widget)
+            self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+            self._view_menu.addAction(dock.toggleViewAction())
+            self._docks[key] = dock
+        self.tabifyDockWidget(self._docks['palette'], self._docks['bom'])
+        self._docks['palette'].raise_()
+        self.resizeDocks(list(self._docks.values()), [290, 290, 290], Qt.Orientation.Horizontal)
 
         # Right panel — tabbed viewers
         self._tab_widget = QTabWidget()
@@ -235,10 +248,9 @@ class MainWindow(QMainWindow):
         )
         self._tab_widget.addTab(self._design_review, "")
 
-        splitter.addWidget(self._tab_widget)
-
-        splitter.setSizes([350, 850])
-        layout.addWidget(splitter)
+        layout.addWidget(self._tab_widget)
+        self._tab_widget.setDocumentMode(True)
+        self._tab_widget.setUsesScrollButtons(True)
 
     def _setup_statusbar(self):
         self._statusbar = QStatusBar()
@@ -321,7 +333,8 @@ class MainWindow(QMainWindow):
             self._schematic_view.scale(factor, factor)
         elif idx == 1:
             self._pcb_view._view.scale(factor, factor)
-        # idx == 2 is the 3D view, idx == 3 is simulation — both handle zoom internally
+        elif idx == 2:
+            self._view_3d.zoom(factor)
 
     # ==================================================================
     # Actions
@@ -427,6 +440,10 @@ class MainWindow(QMainWindow):
         self._tb_manufacture.setText(tr("toolbar_manufacture"))
         self._tb_settings.setText(tr("toolbar_settings"))
         self._tb_wire.setText(tr("toolbar_wire"))
+        for name in ('new', 'open', 'save', 'export', 'manufacture', 'settings', 'wire'):
+            getattr(self, '_tb_'+name).setToolTip(tr('toolbar_'+name))
+        for key, dock in self._docks.items():
+            dock.setWindowTitle(tr('dock_'+key))
         self._tab_widget.setTabText(0, tr("tab_schematic"))
         self._tab_widget.setTabText(1, tr("tab_pcb_layout"))
         self._tab_widget.setTabText(2, tr("tab_3d_view"))
